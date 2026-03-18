@@ -43,7 +43,7 @@ const PROLIFIC_BASE_URL = "https://app.prolific.com";
 
 const CACHE_STORAGE_KEY = "studyCache";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const REAPPEAR_MIN_GONE_MS = 15 * 60 * 1000; // 15 minutes
+const REAPPEAR_MIN_GONE_MS = 20 * 60 * 1000; // 20 minutes
 const CACHE_SAVE_DEBOUNCE_MS = 3_000;
 
 const SCAN_INTERVAL_MS = 20_000;
