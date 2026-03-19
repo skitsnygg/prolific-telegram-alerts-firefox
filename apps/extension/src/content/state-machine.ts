@@ -37,10 +37,8 @@ export function shouldKeepCacheEntryOnLoad(
   now: number,
   cacheTtlMs: number,
 ): boolean {
-  if (entry.state !== "ABSENT") return true;
-
-  const absentFrom = entry.absentSince ?? entry.lastSeenAt;
-  return now - absentFrom <= cacheTtlMs;
+  const referenceTime = entry.absentSince ?? entry.lastSeenAt;
+  return now - referenceTime <= cacheTtlMs;
 }
 
 export function shouldBatchReappearedStudies(
@@ -58,10 +56,8 @@ export function pruneExpiredEntries(
   let changed = false;
 
   for (const [id, entry] of cache) {
-    if (entry.state !== "ABSENT") continue;
-
-    const absentFrom = entry.absentSince ?? entry.lastSeenAt;
-    if (now - absentFrom > cacheTtlMs) {
+    const referenceTime = entry.absentSince ?? entry.lastSeenAt;
+    if (now - referenceTime > cacheTtlMs) {
       cache.delete(id);
       changed = true;
     }
@@ -133,10 +129,16 @@ function applySuccessfulPollTransitions(
       existing.absentSince !== null ||
       existing.lastSeenAt !== now
     ) {
+      const stateChanged =
+        existing.state !== "ACTIVE" || existing.absentSince !== null;
+
       existing.state = "ACTIVE";
       existing.lastSeenAt = now;
       existing.absentSince = null;
-      cacheChanged = true;
+
+      if (stateChanged) {
+        cacheChanged = true;
+      }
     }
   }
 
