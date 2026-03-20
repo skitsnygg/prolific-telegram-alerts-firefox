@@ -20,8 +20,6 @@ export const users = pgTable("users", {
 
   notificationsSent: integer("notifications_sent").notNull().default(0),
 
-  country: text("country"),
-
   lastOnline: timestamp("last_online", { withTimezone: true }),
 
   extensionVersion: text("extension_version"),
@@ -33,6 +31,8 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+
+  isActive: boolean("is_active").default(true).notNull(),
 
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
