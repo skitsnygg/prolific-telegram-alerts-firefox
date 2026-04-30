@@ -14,7 +14,7 @@ import {
 } from "../lib/storage.js";
 import { confirmToken, checkStatus, ConnectionError } from "../lib/api.js";
 import { updateStatus } from "../lib/storage.js";
-import { action, tabs } from "../lib/browser.js";
+import { action, sendRuntimeMessage, tabs } from "../lib/browser.js";
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -240,50 +240,64 @@ async function handleConfirmToken() {
   }
 }
 
-/**
- * Handle emulate notification button.
- * Sends a fake study notification through the full API pipeline.
- */
-async function handleEmulateNotification() {
-  const emulateBtn = $<HTMLButtonElement>("emulate-btn");
-  const emulateResult = $("emulate-result");
+type TestAlertResponse = {
+  success: boolean;
+  message?: string;
+  data?: {
+    deduplicated?: boolean;
+  };
+};
 
-  emulateBtn.disabled = true;
-  emulateBtn.textContent = "Sending...";
-  emulateResult.classList.add("hidden");
+/**
+ * Temporary manual pipeline test hook.
+ * Sends a fake study through the same background STUDY_DETECTED path used by
+ * real content-script detections.
+ */
+async function handleSendTestAlert() {
+  const testAlertBtn = $<HTMLButtonElement>("test-alert-btn");
+  const testAlertResult = $("test-alert-result");
+
+  testAlertBtn.disabled = true;
+  testAlertBtn.textContent = "Sending...";
+  testAlertResult.classList.add("hidden");
+
+  const fakeStudy = {
+    title: "Test Prolific Alert",
+    reward: "£5.00",
+    completionTime: "10 minutes",
+    places: "99 places",
+    url: `https://app.prolific.com/studies/test-alert-${Date.now()}`,
+    postedAt: new Date().toISOString(),
+    mobileSupported: true,
+  };
 
   try {
-    const { notifyStudy } = await import("../lib/api.js");
-    const extensionId = await getExtensionId();
+    console.log(`${LOG} 🧪 Sending test alert through background pipeline`);
+    const response = await sendRuntimeMessage<TestAlertResponse>({
+      type: "STUDY_DETECTED",
+      study: fakeStudy,
+    });
 
-    const fakeStudy = {
-      title: "[TEST] Sample Research Study",
-      reward: "£5.00",
-      url: `https://app.prolific.com/studies/test-${Date.now()}`,
-      postedAt: new Date().toISOString(),
-      mobileSupported: true,
-    };
-
-    const response = await notifyStudy(extensionId, fakeStudy);
-
-    emulateResult.classList.remove("hidden", "success", "error");
-    if (response.success) {
-      emulateResult.classList.add("success");
-      emulateResult.textContent = response.data?.deduplicated
-        ? "✅ Sent (deduplicated — already sent)"
-        : "✅ Notification sent to Telegram!";
+    testAlertResult.classList.remove("hidden", "success", "error");
+    if (response?.success) {
+      testAlertResult.classList.add("success");
+      testAlertResult.textContent = response.data?.deduplicated
+        ? "Sent, but deduplicated by the API."
+        : "Test alert sent through the full pipeline.";
     } else {
-      emulateResult.classList.add("error");
-      emulateResult.textContent = `❌ ${response.message}`;
+      testAlertResult.classList.add("error");
+      testAlertResult.textContent =
+        response?.message || "The background/API pipeline returned an error.";
     }
   } catch (error) {
-    emulateResult.classList.remove("hidden", "success", "error");
-    emulateResult.classList.add("error");
-    emulateResult.textContent = "❌ Connection error. Is the API running?";
-    console.error("Emulate notification failed:", error);
+    testAlertResult.classList.remove("hidden", "success", "error");
+    testAlertResult.classList.add("error");
+    testAlertResult.textContent =
+      "Could not send the test alert through the background pipeline.";
+    console.error(`${LOG} ❌ Test alert failed:`, error);
   } finally {
-    emulateBtn.disabled = false;
-    emulateBtn.textContent = "🧪 Emulate Notification";
+    testAlertBtn.disabled = false;
+    testAlertBtn.textContent = "Send Test Alert";
   }
 }
 
@@ -461,11 +475,10 @@ if (qrCode) {
   });
 }
 
-// Debug button listener (commented out for now)
-// const emulateBtn = document.getElementById("emulate-btn");
-// if (emulateBtn) {
-//   emulateBtn.addEventListener("click", handleEmulateNotification);
-// }
+const testAlertBtn = document.getElementById("test-alert-btn");
+if (testAlertBtn) {
+  testAlertBtn.addEventListener("click", handleSendTestAlert);
+}
 
 // Initialize
 init();

@@ -68,6 +68,7 @@ let domObserver: MutationObserver | null = null;
 const intervalIds: ReturnType<typeof setInterval>[] = [];
 let scanInProgress = false;
 let domStudiesReadyLogged = false;
+const loggedSkipKeys = new Set<string>();
 
 function isContextValid(): boolean {
   return !!runtime?.id;
@@ -85,6 +86,16 @@ function cleanup(): void {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function logSkipOnce(key: string, message: string): void {
+  if (loggedSkipKeys.has(key)) return;
+  loggedSkipKeys.add(key);
+  console.log(`${LOG_PREFIX} ${message}`);
+}
+
+function describeStudy(study: Pick<StudyInfo, "id" | "title">): string {
+  return `id=${study.id} title="${study.title}"`;
 }
 
 async function waitForInitialDomReady(): Promise<void> {
@@ -238,14 +249,6 @@ function getCacheSizeKb(): number {
   return bytes / 1024;
 }
 
-function getCacheSnapshot(): Record<string, StudyCacheEntry> {
-  const payload: Record<string, StudyCacheEntry> = {};
-  for (const [id, entry] of studyCache) {
-    payload[id] = entry;
-  }
-  return payload;
-}
-
 intervalIds.push(setInterval(() => logState("periodic-1min"), 60_000));
 
 // ── DOM study scanning ──────────────────────────────────────────────────────
@@ -278,12 +281,22 @@ function parseDomStudy(item: Element): StudyInfo | null {
   const id =
     parseStudyIdFromTestId(rawTestId) ||
     parseStudyIdFromHref(titleAnchor?.getAttribute("href") ?? null);
-  if (!id) return null;
+  if (!id) {
+    const href = titleAnchor?.getAttribute("href") ?? "";
+    logSkipOnce(
+      `no-id:${rawTestId ?? ""}:${href}`,
+      `skip study card: no ID`,
+    );
+    return null;
+  }
 
-  const title =
+  const titleText =
     readText(titleAnchor) ||
-    readText(item.querySelector('[data-testid="title"]')) ||
-    "New Study Available";
+    readText(item.querySelector('[data-testid="title"]'));
+  if (!titleText) {
+    logSkipOnce(`no-title:${id}`, `study ${id}: no title, using fallback`);
+  }
+  const title = titleText || "New Study Available";
 
   const rewardAmount = readText(
     item.querySelector('[data-testid="study-tag-reward"]'),
@@ -326,6 +339,9 @@ function readDomStudiesSnapshot(): StudyInfo[] | null {
   if (!list) return null;
 
   const items = Array.from(list.querySelectorAll(STUDY_ITEM_SELECTOR));
+  console.log(
+    `${LOG_PREFIX} study cards found: ${items.length} using ${STUDY_ITEM_SELECTOR}`,
+  );
   const studies: StudyInfo[] = [];
 
   for (const item of items) {
@@ -467,6 +483,7 @@ async function applyFilters(
 ): Promise<{ passed: StudyInfo[]; filtered: StudyInfo[] }> {
   const notificationsEnabled = await getNotificationsEnabledSetting();
   if (!notificationsEnabled) {
+    logSkipOnce("notifications-disabled", "skip alerts: notifications disabled");
     return { passed: [], filtered: studies };
   }
 
@@ -477,20 +494,31 @@ async function applyFilters(
   const filtered: StudyInfo[] = [];
 
   for (const study of studies) {
-    let skip = false;
+    let skipReason: string | null = null;
 
     if (minReward > 0) {
       const rewardGbp = parseRewardGbp(study.reward);
-      if (rewardGbp !== null && rewardGbp < minReward) skip = true;
+      if (rewardGbp !== null && rewardGbp < minReward) {
+        skipReason = `reward ${rewardGbp} < min ${minReward}`;
+      }
     }
 
-    if (!skip && minPlaces > 1) {
+    if (!skipReason && minPlaces > 1) {
       const places = parsePlaces(study.places);
-      if (places !== null && places < minPlaces) skip = true;
+      if (places !== null && places < minPlaces) {
+        skipReason = `places ${places} < min ${minPlaces}`;
+      }
     }
 
-    if (skip) filtered.push(study);
-    else passed.push(study);
+    if (skipReason) {
+      logSkipOnce(
+        `filtered:${study.id}:${skipReason}`,
+        `skip filtered: ${describeStudy(study)} (${skipReason})`,
+      );
+      filtered.push(study);
+    } else {
+      passed.push(study);
+    }
   }
 
   return { passed, filtered };
@@ -509,22 +537,41 @@ function sendMessageToBackground(message: Record<string, unknown>): Promise<{
       return;
     }
 
+    const type =
+      typeof message.type === "string" ? message.type : "UNKNOWN_MESSAGE";
+    const details =
+      type === "STUDY_DETECTED" || type === "STUDY_REAPPEARED"
+        ? describeStudy(message.study as Pick<StudyInfo, "id" | "title">)
+        : type === "STUDIES_SUMMARY" || type === "STUDIES_REAPPEARED_SUMMARY"
+          ? `count=${(message.summary as { totalNew: number }).totalNew}`
+          : "";
+    console.log(
+      `${LOG_PREFIX} sendMessage -> background: type=${type}${details ? ` ${details}` : ""}`,
+    );
+
     void sendRuntimeMessage<{
       success: boolean;
       message?: string;
     } | null>(message)
       .then((response) => {
+        console.log(
+          `${LOG_PREFIX} sendMessage succeeded: type=${type} success=${response?.success === true}`,
+        );
         resolve(response ?? null);
       })
       .catch((error: unknown) => {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg.includes("Extension context invalidated")) cleanup();
+        console.warn(`${LOG_PREFIX} sendMessage failed: type=${type}`, error);
         resolve(null);
       });
   });
 }
 
 async function sendStudyDetected(study: StudyInfo): Promise<void> {
+  console.log(
+    `${LOG_PREFIX} real study alert -> background: ${describeStudy(study)}`,
+  );
   const response = await sendMessageToBackground({
     type: "STUDY_DETECTED",
     study: {
@@ -692,6 +739,31 @@ async function scanAndReport(): Promise<void> {
       (study) => parsePlaces(study.places) !== 1,
     );
 
+    for (const studyId of transition.newStudyIds) {
+      const study = studyById.get(studyId);
+      if (study) {
+        console.log(
+          `${LOG_PREFIX} study considered new: ${describeStudy(study)}`,
+        );
+      }
+    }
+
+    const reappearedIdSet = new Set(transition.reappearedStudyIds);
+    const unnotifiedIdSet = new Set(unnotifiedVisibleCandidateIds);
+    for (const study of scannedStudies) {
+      if (unnotifiedIdSet.has(study.id) || reappearedIdSet.has(study.id)) {
+        continue;
+      }
+
+      const cacheEntry = studyCache.get(study.id);
+      if (cacheEntry?.notifiedAt && cacheEntry.notifiedAt > 0) {
+        logSkipOnce(
+          `cached:${study.id}`,
+          `skip cached/duplicate: ${describeStudy(study)}`,
+        );
+      }
+    }
+
     if (newStudies.length > 1) {
       await sendStudiesSummary(newStudies.length, findTopPaid(newStudies));
       cacheChanged =
@@ -805,15 +877,19 @@ function scheduleAutoRefresh(): void {
 // ── Init ────────────────────────────────────────────────────────────────────
 
 (async () => {
-  console.log(`${LOG_PREFIX} 🚀 Content script start: ${window.location.href}`);
+  console.log(`${LOG_PREFIX} content script loaded`);
+  console.log(`${LOG_PREFIX} current URL: ${window.location.href}`);
+  console.log(`${LOG_PREFIX} on /studies: ${isExactStudiesPage()}`);
+  console.log(
+    `${LOG_PREFIX} selectors: list=${STUDY_LIST_SELECTOR} item=${STUDY_ITEM_SELECTOR}`,
+  );
 
   registerDebugHooks();
 
   await loadCache();
   console.log(
-    `${LOG_PREFIX} 💾 CACHE: ${getCacheSizeKb().toFixed(2)} KB loaded`,
+    `${LOG_PREFIX} cache loaded: entries=${studyCache.size} size=${getCacheSizeKb().toFixed(2)} KB`,
   );
-  console.log(`${LOG_PREFIX} 💾 CACHE OBJECT (startup):`, getCacheSnapshot());
   logState("startup");
 
   await waitForInitialDomReady();

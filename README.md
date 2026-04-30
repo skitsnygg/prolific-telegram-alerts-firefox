@@ -1,26 +1,36 @@
 # Prolific Alerts
 
-This is a monorepo containing a browser extension, a Telegram bot, and a backend API.
-The extension watches the Prolific.com tab for changes and sends a Telegram notification though API to the end user.s
+This repository is a Firefox-compatible port/adaptation of the original Prolific Alerts project found here - https://github.com/bogk9/prolific-telegram-alerts. It keeps the original monorepo structure and core idea: a browser extension watches Prolific.com and sends Telegram notifications through the API.
 
-## Architecture
+## Monorepo layout
 
-- apps/extension: The browser extension.
-- apps/bot: The notification bot.
-- apps/api: The backend service.
-- packages/database: Database schema and client.
+- `apps/extension` — browser extension
+- `apps/bot` — Telegram bot
+- `apps/api` — backend API
+- `packages/database` — database schema and client
 
-## Extension Build Setup
+## Extension build setup
 
 The extension lives in `apps/extension`.
 
 - Tooling: Vite + TypeScript
-- Build outputs:
-  - Chrome: `apps/extension/dist`
-  - Firefox: `apps/extension/dist-firefox`
-- The manifest root is `apps/extension/public`, not the repo root.
+- Chrome build output: `apps/extension/dist`
+- Firefox build output: `apps/extension/dist-firefox`
+- Manifest source/root: `apps/extension/public`
 
-## Extension Commands
+The manifest is not at the repo root.
+
+## Firefox-specific notes
+
+- Firefox build output: `apps/extension/dist-firefox`
+- Firefox manifest is generated through `apps/extension/scripts/build-manifest.mjs`
+- Firefox manifest includes `browser_specific_settings.gecko`
+- Firefox packaging uses `web-ext`
+- Temporary loading path in Firefox:
+  - `about:debugging#/runtime/this-firefox`
+  - Select `apps/extension/dist-firefox/manifest.json`
+
+## Extension commands
 
 Run these from `apps/extension`:
 
@@ -40,30 +50,69 @@ Build the Firefox package:
 npm run build:firefox
 ```
 
+Lint the Firefox build:
+
+```bash
+npx web-ext lint --source-dir dist-firefox
+```
+
+Package the Firefox build:
+
+```bash
+npx web-ext build --source-dir dist-firefox
+```
+
 Load the Firefox build temporarily:
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click `Load Temporary Add-on...`
 3. Select `apps/extension/dist-firefox/manifest.json`
 
-Lint the Firefox build with `web-ext`:
+If you self-host the API, set `VITE_API_BASE_URL` before building so the runtime API URL and manifest host permissions stay aligned.
+
+## Mozilla submission notes
+
+Reviewer reproduction steps from `apps/extension`:
 
 ```bash
+npm install
+npm run build:firefox
 npx web-ext lint --source-dir dist-firefox
-```
-
-Package the Firefox build with `web-ext`:
-
-```bash
 npx web-ext build --source-dir dist-firefox
 ```
 
-If you self-host the API, set `VITE_API_BASE_URL` before building so the runtime API URL and manifest host permissions stay aligned.
+## Creating a clean AMO source archive
+
+Run this from the repo root:
+
+```bash
+zip -r ~/prolific-telegram-alerts-firefox-source.zip . \
+  -x ".git/*" \
+  -x ".idea/*" \
+  -x ".venv/*" \
+  -x ".agents/*" \
+  -x "*/.DS_Store" \
+  -x ".DS_Store" \
+  -x "apps/extension/node_modules/*" \
+  -x "apps/extension/dist/*" \
+  -x "apps/extension/dist-firefox/*" \
+  -x "apps/extension/web-ext-artifacts/*" \
+  -x "node_modules/*" \
+  -x "package-lock.json" \
+  -x "apps/extension/package-lock.json"
+```
+
+Verify the archive contents:
+
+```bash
+unzip -l ~/prolific-telegram-alerts-firefox-source.zip | grep -E "\.agents|\.DS_Store|node_modules|dist-firefox|web-ext-artifacts|package-lock" || echo "Clean source zip looks good"
+```
+
+## Contact
+
+- Original developer - `bog.kn (at) proton.me`
+- Firefox  port - `selfsabotage (at) proton.me`
 
 ## License
 
 This project is released under an open-source license. Feel free to explore and learn from the code.
-
-## Contact
-
-If you have any questions or just want to chat, you can contact me at [bog.kn (at) proton.me].

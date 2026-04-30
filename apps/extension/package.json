@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development vite build",
     "build": "npm run build:chrome",
-    "build:chrome": "cross-env TARGET_BROWSER=chrome tsc && cross-env TARGET_BROWSER=chrome vite build && cross-env TARGET_BROWSER=chrome node ./scripts/build-manifest.mjs chrome",
-    "build:firefox": "cross-env TARGET_BROWSER=firefox tsc && cross-env TARGET_BROWSER=firefox vite build && cross-env TARGET_BROWSER=firefox node ./scripts/build-manifest.mjs firefox",
+    "build:chrome": "cross-env TARGET_BROWSER=chrome tsc && cross-env TARGET_BROWSER=chrome vite build && cross-env TARGET_BROWSER=chrome vite build --config vite.content.config.ts && cross-env TARGET_BROWSER=chrome node ./scripts/build-manifest.mjs chrome",
+    "build:firefox": "cross-env TARGET_BROWSER=firefox tsc && cross-env TARGET_BROWSER=firefox vite build && cross-env TARGET_BROWSER=firefox vite build --config vite.content.config.ts && cross-env TARGET_BROWSER=firefox node ./scripts/build-manifest.mjs firefox",
     "check-types": "tsc --noEmit",
     "lint:firefox": "web-ext lint --source-dir dist-firefox",
     "package:firefox": "web-ext build --source-dir dist-firefox --artifacts-dir web-ext-artifacts",

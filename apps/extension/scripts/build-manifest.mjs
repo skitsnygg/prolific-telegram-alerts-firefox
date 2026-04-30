@@ -16,7 +16,7 @@ const baseManifestPath = path.join(extensionRoot, "public", "manifest.json");
 const DEFAULT_API_BASE_URL = "https://prolificapi.notifyme.top";
 const FIREFOX_GECKO_ID =
   "prolific-telegram-alerts-firefox@skitsnygg.github.io";
-const FIREFOX_STRICT_MIN_VERSION = "121.0";
+const FIREFOX_STRICT_MIN_VERSION = "112.0";
 
 const baseManifest = JSON.parse(await readFile(baseManifestPath, "utf8"));
 const apiBaseUrl = (
@@ -44,6 +44,13 @@ if (target === "firefox") {
     gecko: {
       id: FIREFOX_GECKO_ID,
       strict_min_version: FIREFOX_STRICT_MIN_VERSION,
+      data_collection_permissions: {
+        required: [
+          "authenticationInfo",
+          "personalCommunications",
+          "websiteActivity",
+        ],
+      },
     },
   };
 }
