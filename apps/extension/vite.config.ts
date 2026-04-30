@@ -1,12 +1,15 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
 
+const targetBrowser =
+  process.env.TARGET_BROWSER === "firefox" ? "firefox" : "chrome";
+
 export default defineConfig({
   esbuild: {
     drop: process.env.NODE_ENV !== "development" ? ["console", "debugger"] : [],
   },
   build: {
-    outDir: "dist",
+    outDir: targetBrowser === "firefox" ? "dist-firefox" : "dist",
     emptyOutDir: true,
     modulePreload: false,
     rollupOptions: {

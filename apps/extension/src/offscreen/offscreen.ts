@@ -1,3 +1,5 @@
+import { runtime } from "../lib/browser.js";
+
 /**
  * Offscreen document for playing audio (beep alert).
  *
@@ -5,7 +7,7 @@
  * document from the background and send it a message to play the beep.
  */
 
-chrome.runtime.onMessage.addListener((message) => {
+runtime.onMessage.addListener((message) => {
   if (message.type === "PLAY_BEEP") {
     playBeep();
   }

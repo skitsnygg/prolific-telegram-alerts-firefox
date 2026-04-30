@@ -13,6 +13,7 @@ import {
   shouldKeepCacheEntryOnLoad,
   type StudyCacheEntry,
 } from "./state-machine";
+import { runtime, sendRuntimeMessage, storage } from "../lib/browser.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ let scanInProgress = false;
 let domStudiesReadyLogged = false;
 
 function isContextValid(): boolean {
-  return typeof chrome !== "undefined" && !!chrome.runtime?.id;
+  return !!runtime?.id;
 }
 
 function cleanup(): void {
@@ -128,7 +129,7 @@ function isValidStudyCacheEntry(value: unknown): value is StudyCacheEntry {
 
 async function loadCache(): Promise<void> {
   try {
-    const result = await chrome.storage.local.get(CACHE_STORAGE_KEY);
+    const result = await storage.local.get(CACHE_STORAGE_KEY);
     const raw = result[CACHE_STORAGE_KEY];
     const now = Date.now();
 
@@ -168,7 +169,7 @@ async function saveCache(): Promise<void> {
     for (const [id, entry] of studyCache) {
       payload[id] = entry;
     }
-    await chrome.storage.local.set({ [CACHE_STORAGE_KEY]: payload });
+    await storage.local.set({ [CACHE_STORAGE_KEY]: payload });
     cacheDirty = false;
   } catch (error) {
     console.warn(`${LOG_PREFIX} ⚠️ Failed to save study cache:`, error);
@@ -185,7 +186,7 @@ async function clearAllStudyCache(): Promise<void> {
       cacheSaveTimer = null;
     }
 
-    await chrome.storage.local.remove(CACHE_STORAGE_KEY);
+    await storage.local.remove(CACHE_STORAGE_KEY);
     console.log(`${LOG_PREFIX} 🧹 Debug: study cache cleared`);
   } catch (error) {
     console.warn(`${LOG_PREFIX} ⚠️ Debug: failed to clear study cache`, error);
@@ -433,7 +434,7 @@ function parseRewardGbp(reward: string): number | null {
 
 async function getMinRewardSetting(): Promise<number> {
   try {
-    const result = await chrome.storage.local.get("minRewardGbp");
+    const result = await storage.local.get("minRewardGbp");
     const val = result["minRewardGbp"];
     return typeof val === "number" ? val : 0;
   } catch {
@@ -443,7 +444,7 @@ async function getMinRewardSetting(): Promise<number> {
 
 async function getMinPlacesSetting(): Promise<number> {
   try {
-    const result = await chrome.storage.local.get("minPlaces");
+    const result = await storage.local.get("minPlaces");
     const val = result["minPlaces"];
     return typeof val === "number" ? val : 1;
   } catch {
@@ -453,7 +454,7 @@ async function getMinPlacesSetting(): Promise<number> {
 
 async function getNotificationsEnabledSetting(): Promise<boolean> {
   try {
-    const result = await chrome.storage.local.get("notificationsEnabled");
+    const result = await storage.local.get("notificationsEnabled");
     const val = result["notificationsEnabled"];
     return val === undefined ? true : (val as boolean);
   } catch {
@@ -508,19 +509,18 @@ function sendMessageToBackground(message: Record<string, unknown>): Promise<{
       return;
     }
 
-    try {
-      chrome.runtime.sendMessage(message, (response) => {
-        if (chrome.runtime.lastError) {
-          resolve(null);
-          return;
-        }
+    void sendRuntimeMessage<{
+      success: boolean;
+      message?: string;
+    } | null>(message)
+      .then((response) => {
         resolve(response ?? null);
+      })
+      .catch((error: unknown) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("Extension context invalidated")) cleanup();
+        resolve(null);
       });
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes("Extension context invalidated")) cleanup();
-      resolve(null);
-    }
   });
 }
 
@@ -634,7 +634,7 @@ async function sendReappearedStudiesSummary(
 
 async function isUserActive(): Promise<boolean> {
   try {
-    const result = await chrome.storage.local.get(["isLinked", "isActive"]);
+    const result = await storage.local.get(["isLinked", "isActive"]);
     return result["isLinked"] === true && result["isActive"] === true;
   } catch {
     return false;
@@ -836,7 +836,7 @@ scheduleAutoRefresh();
 
 // Optional UX behavior: if filters are relaxed, drop never-notified cache entries
 // so currently visible studies can be evaluated again immediately.
-chrome.storage.onChanged.addListener((changes, area) => {
+storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
 
   const filterKeys = ["minRewardGbp", "minPlaces", "notificationsEnabled"];

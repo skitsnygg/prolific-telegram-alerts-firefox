@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../config.js";
+import { runtime } from "./browser.js";
 
 const LOG = "[Prolific Alerts][API]";
 
@@ -166,7 +167,7 @@ export async function notifyReappearedSummary(
  */
 export async function checkStatus(
   extensionId: string,
-  extensionVersion: string = chrome.runtime.getManifest().version,
+  extensionVersion: string = runtime.getManifest().version,
 ) {
   console.log(`${LOG} 📊 checkStatus() — extId=${extensionId.slice(0, 8)}...`);
   const body: Record<string, unknown> = { extensionId, extensionVersion };

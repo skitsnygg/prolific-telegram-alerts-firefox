@@ -14,6 +14,7 @@ import {
 } from "../lib/storage.js";
 import { confirmToken, checkStatus, ConnectionError } from "../lib/api.js";
 import { updateStatus } from "../lib/storage.js";
+import { action, tabs } from "../lib/browser.js";
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -127,9 +128,8 @@ async function showStatus() {
       });
 
       // Sync the extension action badge with current status
-      chrome.action.setBadgeText({ text: isActive ? "" : "!" });
-      if (!isActive)
-        chrome.action.setBadgeBackgroundColor({ color: "#e53e3e" });
+      action.setBadgeText({ text: isActive ? "" : "!" });
+      if (!isActive) action.setBadgeBackgroundColor({ color: "#e53e3e" });
 
       if (isActive) {
         statusBadge.textContent = "Active";
@@ -293,11 +293,11 @@ async function handleEmulateNotification() {
 async function checkProlificTab() {
   console.log(`${LOG} 🔍 Checking for open Prolific tabs...`);
   try {
-    const tabs = await chrome.tabs.query({
+    const prolificTabs = await tabs.query({
       url: ["https://app.prolific.com/*", "https://www.prolific.com/*"],
     });
-    console.log(`${LOG} 🔍 Found ${tabs.length} Prolific tab(s)`);
-    if (tabs.length === 0) {
+    console.log(`${LOG} 🔍 Found ${prolificTabs.length} Prolific tab(s)`);
+    if (prolificTabs.length === 0) {
       prolificTabWarning.classList.remove("hidden");
     } else {
       prolificTabWarning.classList.add("hidden");

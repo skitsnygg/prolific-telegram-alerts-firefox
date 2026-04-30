@@ -4,6 +4,7 @@ import {
   DEFAULT_MIN_REWARD_GBP,
   DEFAULT_MIN_PLACES,
 } from "../config.js";
+import { storage } from "./browser.js";
 
 const LOG = "[Prolific Alerts][Storage]";
 
@@ -12,7 +13,7 @@ const LOG = "[Prolific Alerts][Storage]";
  * This persists across sessions via chrome.storage.local.
  */
 export async function getExtensionId(): Promise<string> {
-  const result = await chrome.storage.local.get(STORAGE_KEYS.EXTENSION_ID);
+  const result = await storage.local.get(STORAGE_KEYS.EXTENSION_ID);
   if (result[STORAGE_KEYS.EXTENSION_ID]) {
     console.log(
       `${LOG} 🆔 getExtensionId(): existing ID=${(result[STORAGE_KEYS.EXTENSION_ID] as string).slice(0, 8)}...`,
@@ -21,7 +22,7 @@ export async function getExtensionId(): Promise<string> {
   }
 
   const id = v4();
-  await chrome.storage.local.set({ [STORAGE_KEYS.EXTENSION_ID]: id });
+  await storage.local.set({ [STORAGE_KEYS.EXTENSION_ID]: id });
   console.log(
     `${LOG} 🆕 getExtensionId(): generated new ID=${id.slice(0, 8)}...`,
   );
@@ -35,7 +36,7 @@ export async function saveLinkedState(data: { token: string }) {
   console.log(
     `${LOG} 💾 saveLinkedState(): token=${data.token.slice(0, 8)}...`,
   );
-  await chrome.storage.local.set({
+  await storage.local.set({
     [STORAGE_KEYS.TOKEN]: data.token,
     [STORAGE_KEYS.IS_LINKED]: true,
     [STORAGE_KEYS.IS_ACTIVE]: true,
@@ -48,7 +49,7 @@ export async function saveLinkedState(data: { token: string }) {
  */
 export async function getLinkedState() {
   console.log(`${LOG} 📖 getLinkedState(): reading...`);
-  const result = await chrome.storage.local.get([
+  const result = await storage.local.get([
     STORAGE_KEYS.IS_LINKED,
     STORAGE_KEYS.IS_ACTIVE,
     STORAGE_KEYS.EXTENSION_ID,
@@ -70,7 +71,7 @@ export async function getLinkedState() {
  */
 export async function updateStatus(data: { isActive: boolean }) {
   console.log(`${LOG} 💾 updateStatus(): isActive=${data.isActive}`);
-  await chrome.storage.local.set({
+  await storage.local.set({
     [STORAGE_KEYS.IS_ACTIVE]: data.isActive,
   });
 }
@@ -79,7 +80,7 @@ export async function updateStatus(data: { isActive: boolean }) {
  * Get whether notifications are enabled. Defaults to true.
  */
 export async function getNotificationsEnabled(): Promise<boolean> {
-  const result = await chrome.storage.local.get(
+  const result = await storage.local.get(
     STORAGE_KEYS.NOTIFICATIONS_ENABLED,
   );
   const val = result[STORAGE_KEYS.NOTIFICATIONS_ENABLED];
@@ -93,7 +94,7 @@ export async function getNotificationsEnabled(): Promise<boolean> {
  */
 export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
   console.log(`${LOG} 💾 setNotificationsEnabled(): ${enabled}`);
-  await chrome.storage.local.set({
+  await storage.local.set({
     [STORAGE_KEYS.NOTIFICATIONS_ENABLED]: enabled,
   });
 }
@@ -102,7 +103,7 @@ export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
  * Get the minimum reward threshold (GBP). Defaults to 0.
  */
 export async function getMinReward(): Promise<number> {
-  const result = await chrome.storage.local.get(STORAGE_KEYS.MIN_REWARD);
+  const result = await storage.local.get(STORAGE_KEYS.MIN_REWARD);
   const val = result[STORAGE_KEYS.MIN_REWARD];
   const reward = typeof val === "number" ? val : DEFAULT_MIN_REWARD_GBP;
   console.log(`${LOG} 📖 getMinReward(): £${reward.toFixed(2)}`);
@@ -114,14 +115,14 @@ export async function getMinReward(): Promise<number> {
  */
 export async function setMinReward(value: number): Promise<void> {
   console.log(`${LOG} 💾 setMinReward(): £${value.toFixed(2)}`);
-  await chrome.storage.local.set({ [STORAGE_KEYS.MIN_REWARD]: value });
+  await storage.local.set({ [STORAGE_KEYS.MIN_REWARD]: value });
 }
 
 /**
  * Get the minimum number of places required to trigger a notification. Defaults to 1.
  */
 export async function getMinPlaces(): Promise<number> {
-  const result = await chrome.storage.local.get(STORAGE_KEYS.MIN_PLACES);
+  const result = await storage.local.get(STORAGE_KEYS.MIN_PLACES);
   const val = result[STORAGE_KEYS.MIN_PLACES];
   const places = typeof val === "number" ? val : DEFAULT_MIN_PLACES;
   console.log(`${LOG} 📖 getMinPlaces(): ${places}`);
@@ -133,14 +134,14 @@ export async function getMinPlaces(): Promise<number> {
  */
 export async function setMinPlaces(value: number): Promise<void> {
   console.log(`${LOG} 💾 setMinPlaces(): ${value}`);
-  await chrome.storage.local.set({ [STORAGE_KEYS.MIN_PLACES]: value });
+  await storage.local.set({ [STORAGE_KEYS.MIN_PLACES]: value });
 }
 
 /**
  * Get whether the beep alert sound is enabled. Defaults to true.
  */
 export async function getBeepEnabled(): Promise<boolean> {
-  const result = await chrome.storage.local.get(STORAGE_KEYS.BEEP_ENABLED);
+  const result = await storage.local.get(STORAGE_KEYS.BEEP_ENABLED);
   const val = result[STORAGE_KEYS.BEEP_ENABLED];
   const enabled = val === undefined ? true : (val as boolean);
   console.log(`${LOG} 📖 getBeepEnabled(): ${enabled}`);
@@ -152,7 +153,7 @@ export async function getBeepEnabled(): Promise<boolean> {
  */
 export async function setBeepEnabled(enabled: boolean): Promise<void> {
   console.log(`${LOG} 💾 setBeepEnabled(): ${enabled}`);
-  await chrome.storage.local.set({ [STORAGE_KEYS.BEEP_ENABLED]: enabled });
+  await storage.local.set({ [STORAGE_KEYS.BEEP_ENABLED]: enabled });
 }
 
 /**
@@ -161,7 +162,7 @@ export async function setBeepEnabled(enabled: boolean): Promise<void> {
  */
 export async function clearLinkedState() {
   console.log(`${LOG} 🗑️ clearLinkedState(): removing linking data`);
-  await chrome.storage.local.remove([
+  await storage.local.remove([
     STORAGE_KEYS.TOKEN,
     STORAGE_KEYS.IS_LINKED,
     STORAGE_KEYS.IS_ACTIVE,

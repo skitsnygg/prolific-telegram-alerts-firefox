@@ -13,9 +13,21 @@ import {
   getBeepEnabled,
 } from "../lib/storage.js";
 import { STATUS_CHECK_INTERVAL_HOURS, API_BASE_URL } from "../config.js";
+import {
+  action,
+  alarms,
+  createOffscreenDocument,
+  getRuntimeContexts,
+  notifications,
+  runtime,
+  scripting,
+  supportsOffscreenAudio,
+  tabs,
+} from "../lib/browser.js";
 
 const LOG = "[Prolific Alerts][BG]";
 const STATUS_ALARM_NAME = "status-check";
+let beepFallbackWarned = false;
 
 /**
  * Play the beep alert sound via an offscreen document.
@@ -25,13 +37,13 @@ const STATUS_ALARM_NAME = "status-check";
 async function playBeepViaOffscreen(): Promise<void> {
   try {
     // Ensure the offscreen document exists (no-op if already created)
-    const contexts = await chrome.runtime.getContexts({
-      contextTypes: ["OFFSCREEN_DOCUMENT" as chrome.runtime.ContextType],
+    const contexts = await getRuntimeContexts({
+      contextTypes: ["OFFSCREEN_DOCUMENT"],
     });
     if (contexts.length === 0) {
-      await chrome.offscreen.createDocument({
+      await createOffscreenDocument({
         url: "src/offscreen/offscreen.html",
-        reasons: ["AUDIO_PLAYBACK" as chrome.offscreen.Reason],
+        reasons: ["AUDIO_PLAYBACK"],
         justification: "Play beep alert sound for new study notification",
       });
       // Wait briefly for the offscreen document's script to load and
@@ -40,10 +52,24 @@ async function playBeepViaOffscreen(): Promise<void> {
       await new Promise((r) => setTimeout(r, 150));
     }
     // Tell the offscreen document to play the beep
-    chrome.runtime.sendMessage({ type: "PLAY_BEEP" });
+    runtime.sendMessage({ type: "PLAY_BEEP" });
   } catch (err) {
     console.warn(`${LOG} ⚠️ Could not play beep via offscreen:`, err);
   }
+}
+
+async function playBeepAlert(): Promise<void> {
+  if (!supportsOffscreenAudio()) {
+    if (!beepFallbackWarned) {
+      beepFallbackWarned = true;
+      console.warn(
+        `${LOG} 🔕 Beep audio is unavailable in this browser build; notifications will still be shown`,
+      );
+    }
+    return;
+  }
+
+  await playBeepViaOffscreen();
 }
 
 /** Prolific URL patterns matching the manifest content_scripts. */
@@ -62,14 +88,14 @@ async function injectIntoExistingTabs(): Promise<void> {
     `${LOG} 🔌 Injecting content script into existing Prolific tabs...`,
   );
   try {
-    const tabs = await chrome.tabs.query({ url: PROLIFIC_URLS });
+    const openTabs = await tabs.query({ url: PROLIFIC_URLS });
     console.log(
-      `${LOG} 🔌 Found ${tabs.length} existing Prolific tab(s) to inject into`,
+      `${LOG} 🔌 Found ${openTabs.length} existing Prolific tab(s) to inject into`,
     );
-    for (const tab of tabs) {
+    for (const tab of openTabs) {
       if (!tab.id) continue;
       try {
-        await chrome.scripting.executeScript({
+        await scripting.executeScript({
           target: { tabId: tab.id },
           files: ["content.js"],
         });
@@ -96,21 +122,21 @@ async function injectIntoExistingTabs(): Promise<void> {
  */
 
 // On install: generate extension ID and set up alarms
-chrome.runtime.onInstalled.addListener(async () => {
+runtime.onInstalled.addListener(async () => {
   console.log(`${LOG} 🚀 onInstalled event fired`);
   const extensionId = await getExtensionId();
   console.log(`${LOG} 🆔 Extension installed, ID: ${extensionId}`);
 
   // Set uninstall URL so the API can auto-reset extension_install_id
   const uninstallUrl = `${API_BASE_URL}/api/unlink-extension?extensionId=${encodeURIComponent(extensionId)}`;
-  chrome.runtime.setUninstallURL(uninstallUrl);
+  runtime.setUninstallURL(uninstallUrl);
   console.log(`${LOG} 🗑️ Uninstall URL set`);
 
   // Set up periodic status check (every 3 hours)
   console.log(
     `${LOG} ⏰ Creating status-check alarm (every ${STATUS_CHECK_INTERVAL_HOURS}h)`,
   );
-  chrome.alarms.create(STATUS_ALARM_NAME, {
+  alarms.create(STATUS_ALARM_NAME, {
     periodInMinutes: STATUS_CHECK_INTERVAL_HOURS * 60,
   });
 
@@ -124,24 +150,23 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // On every service worker startup: ensure alarms exist and run a status check
-chrome.runtime.onStartup.addListener(async () => {
+runtime.onStartup.addListener(async () => {
   console.log(`${LOG} 🚀 onStartup event fired — service worker started`);
 
   // Re-create alarms (they persist across restarts, but ensure they exist)
-  chrome.alarms.get(STATUS_ALARM_NAME, (alarm) => {
-    if (!alarm) {
-      console.log(
-        `${LOG} ⏰ Status alarm missing, recreating (every ${STATUS_CHECK_INTERVAL_HOURS}h)`,
-      );
-      chrome.alarms.create(STATUS_ALARM_NAME, {
-        periodInMinutes: STATUS_CHECK_INTERVAL_HOURS * 60,
-      });
-    } else {
-      console.log(
-        `${LOG} ⏰ Status alarm already exists, next fire: ${new Date(alarm.scheduledTime).toISOString()}`,
-      );
-    }
-  });
+  const alarm = await alarms.get(STATUS_ALARM_NAME);
+  if (!alarm) {
+    console.log(
+      `${LOG} ⏰ Status alarm missing, recreating (every ${STATUS_CHECK_INTERVAL_HOURS}h)`,
+    );
+    alarms.create(STATUS_ALARM_NAME, {
+      periodInMinutes: STATUS_CHECK_INTERVAL_HOURS * 60,
+    });
+  } else {
+    console.log(
+      `${LOG} ⏰ Status alarm already exists, next fire: ${new Date(alarm.scheduledTime).toISOString()}`,
+    );
+  }
 
   // Run status check immediately on startup
   console.log(`${LOG} 🔑 Running startup status check...`);
@@ -150,7 +175,7 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 // Handle alarms
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+alarms.onAlarm.addListener(async (alarm) => {
   console.log(
     `${LOG} ⏰ Alarm fired: "${alarm.name}" at ${new Date().toISOString()}`,
   );
@@ -167,7 +192,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 async function performStatusCheck() {
   console.log(`${LOG} 🔑 performStatusCheck() — start`);
   try {
-    const extensionVersion = chrome.runtime.getManifest().version;
+    const extensionVersion = runtime.getManifest().version;
     const state = await getLinkedState();
     console.log(
       `${LOG} 🔑 Current state: isLinked=${state.isLinked}, isActive=${state.isActive}, extensionId=${state.extensionId?.slice(0, 8)}...`,
@@ -190,7 +215,7 @@ async function performStatusCheck() {
     if (response.statusCode === 404) {
       console.log(`${LOG} ⚠️ User not found in database (404), clearing state`);
       await clearLinkedState();
-      chrome.notifications.create("user-deleted", {
+      notifications.create("user-deleted", {
         type: "basic",
         iconUrl: "icons/icon128.png",
         title: "Prolific Alerts — Reactivation Required",
@@ -211,10 +236,10 @@ async function performStatusCheck() {
 
       // Update badge based on active state
       if (isActive) {
-        chrome.action.setBadgeText({ text: "" });
+        action.setBadgeText({ text: "" });
       } else {
-        chrome.action.setBadgeText({ text: "!" });
-        chrome.action.setBadgeBackgroundColor({ color: "#e53e3e" });
+        action.setBadgeText({ text: "!" });
+        action.setBadgeBackgroundColor({ color: "#e53e3e" });
       }
 
       // If account became inactive, show a notification
@@ -222,7 +247,7 @@ async function performStatusCheck() {
         console.log(
           `${LOG} ⚠️ Account transitioned to INACTIVE — showing reactivation notification`,
         );
-        chrome.notifications.create("account-inactive", {
+        notifications.create("account-inactive", {
           type: "basic",
           iconUrl: "icons/icon128.png",
           title: "Prolific Alerts — Reactivation Required",
@@ -241,7 +266,7 @@ async function performStatusCheck() {
 }
 
 // Listen for messages from content script
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+runtime.onMessage.addListener((message, _sender, sendResponse) => {
   console.log(
     `${LOG} 📨 Message received: type=${message.type}`,
     message.type === "STUDY_DETECTED" || message.type === "STUDY_REAPPEARED"
@@ -360,7 +385,7 @@ async function handleStudyDetected(study: StudyPayload) {
 
   if (response.success && !response.data?.deduplicated) {
     console.log(`${LOG} 🔔 Showing Chrome notification for "${study.title}"`);
-    chrome.notifications.create(`study-${Date.now()}`, {
+    notifications.create(`study-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
       title: "New Prolific Study!",
@@ -369,7 +394,7 @@ async function handleStudyDetected(study: StudyPayload) {
 
     const beepOn = await getBeepEnabled();
     if (beepOn) {
-      await playBeepViaOffscreen();
+      await playBeepAlert();
     }
   } else if (response.data?.deduplicated) {
     console.log(
@@ -398,7 +423,7 @@ async function handleStudyReappeared(study: StudyPayload) {
     console.log(
       `${LOG} 🔔 Showing Chrome notification for re-appeared "${study.title}"`,
     );
-    chrome.notifications.create(`study-reappeared-${Date.now()}`, {
+    notifications.create(`study-reappeared-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
       title: "🔄 Study Re-appeared!",
@@ -407,7 +432,7 @@ async function handleStudyReappeared(study: StudyPayload) {
 
     const beepOn = await getBeepEnabled();
     if (beepOn) {
-      await playBeepViaOffscreen();
+      await playBeepAlert();
     }
   }
 
@@ -429,7 +454,7 @@ async function handleStudiesSummary(summary: SummaryPayload) {
   if (response.success) {
     const bestTitle = summary.topStudies[0]?.title ?? "N/A";
     const bestReward = summary.topStudies[0]?.reward ?? "";
-    chrome.notifications.create(`studies-summary-${Date.now()}`, {
+    notifications.create(`studies-summary-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
       title: "📊 New Studies Available!",
@@ -438,7 +463,7 @@ async function handleStudiesSummary(summary: SummaryPayload) {
 
     const beepOn = await getBeepEnabled();
     if (beepOn) {
-      await playBeepViaOffscreen();
+      await playBeepAlert();
     }
   }
 
@@ -462,7 +487,7 @@ async function handleStudiesReappearedSummary(summary: SummaryPayload) {
   if (response.success) {
     const bestTitle = summary.topStudies[0]?.title ?? "N/A";
     const bestReward = summary.topStudies[0]?.reward ?? "";
-    chrome.notifications.create(`studies-reappeared-summary-${Date.now()}`, {
+    notifications.create(`studies-reappeared-summary-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
       title: "🔄 Re-appeared Studies!",
@@ -471,7 +496,7 @@ async function handleStudiesReappearedSummary(summary: SummaryPayload) {
 
     const beepOn = await getBeepEnabled();
     if (beepOn) {
-      await playBeepViaOffscreen();
+      await playBeepAlert();
     }
   }
 
