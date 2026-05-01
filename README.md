@@ -1,165 +1,148 @@
-# Prolific Alerts / Study Alerts
+# Prolific / Connect - Telegram Alerts
 
-This repository is a Firefox-compatible port/adaptation of the original Prolific Alerts project found here - https://github.com/bogk9/prolific-telegram-alerts.
+This repo is a Firefox-focused fork/adaptation of the original project by `bogk9`, the chromium based browser files in this repo are untested and from the original fork. I left them in this repo as they should still function however I cannot guarantee any type of stability:
 
-It now supports two alert providers through the same extension, API, bot, and database stack:
+Again, this is a port of the following repo, If you want to run the stable version requiring no local environment, added features, or browser compatibility:
+- Original project (for Chromium based browsers): https://github.com/bogk9/prolific-telegram-alerts
+- Original developer contact: `bog.kn (at) proton.me`
 
-- Prolific
-- CloudResearch Connect
+This local branch adds practical self-hosted development support around the same core idea:
 
-The extension only sends alerts. It does not auto-accept, reserve, click, submit, or otherwise interact with studies/projects.
+- Firefox support
+- Prolific alerts
+- CloudResearch Connect alerts
+- local API + local Telegram bot support
+- Telegram messages with study/project links
 
-## Monorepo layout
+This extension is alerts-only. It does not auto-click, auto-accept, reserve, submit, or otherwise interact with studies/projects.
 
-- `apps/extension` — browser extension for Prolific + CloudResearch Connect alerts
+## What works in this branch
+
+- Prolific alerts from `https://app.prolific.com/studies`
+- CloudResearch Connect alerts from `https://connect.cloudresearch.com/participant/dashboard`
+- Telegram notifications through the local/self-hosted API and bot
+- Study/project links included in Telegram messages
+- Prolific device support in alerts when desktop/mobile data is available
+- CloudResearch auto-refresh at `10–15 seconds`
+
+## Repo layout
+
+- `apps/extension` — Firefox/Chrome extension
+- `apps/api` — local/self-hosted API
 - `apps/bot` — Telegram bot
-- `apps/api` — backend API
-- `packages/database` — database schema and client
+- `packages/database` — shared database package
 
-## Extension build setup
+## Local setup
 
-The extension lives in `apps/extension`.
+### 1. Neon Postgres
 
-- Tooling: Vite + TypeScript
-- Chrome build output: `apps/extension/dist`
-- Firefox build output: `apps/extension/dist-firefox`
-- Manifest source/root: `apps/extension/public`
+Use a Neon Postgres database and keep the connection string in local `.env` files only.
 
-The manifest is not at the repo root.
+You will need:
 
-## Firefox-specific notes
+- one Neon Postgres `DATABASE_URL`
+- one Telegram bot token from BotFather
+- the bot username from BotFather
 
-- Firefox build output: `apps/extension/dist-firefox`
-- Firefox manifest is generated through `apps/extension/scripts/build-manifest.mjs`
-- Firefox manifest includes `browser_specific_settings.gecko`
-- Firefox packaging uses `web-ext`
-- Temporary loading path in Firefox:
-  - `about:debugging#/runtime/this-firefox`
-  - Select `apps/extension/dist-firefox/manifest.json`
+### 2. API env file
 
-## Supported pages
+Create `apps/api/.env`:
 
-- Prolific detection runs on `https://app.prolific.com/studies` and keeps the existing Prolific alert flow intact.
-- CloudResearch detection runs only on `https://connect.cloudresearch.com/participant/dashboard`.
-
-CloudResearch support is alerts-only:
-
-- No auto-clicking
-- No auto-accepting
-- No reserving
-- No submitting
-- No project interaction
-
-## Extension commands
-
-Run these from `apps/extension`:
-
-```bash
-npm install
+```env
+DATABASE_URL=...
+TELEGRAM_BOT_TOKEN=...
+PORT=3001
+API_KEY=
 ```
 
-Build the Chrome package:
+Notes:
 
-```bash
-npm run build:chrome
+- `PORT=3001` matches the current local API setup for this branch.
+- `API_KEY` is optional if you use it locally.
+
+### 3. Bot env file
+
+Create `apps/bot/.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=...
+DATABASE_URL=...
+API_BASE_URL=http://127.0.0.1:3001
 ```
 
-Build the Firefox package:
+Do not commit either `.env` file.
+
+## Start the local API and bot
+
+Run from the repo root:
 
 ```bash
-npm run build:firefox
+cd ~/prolific-telegram-alerts-firefox
+pnpm --filter api build
+pnpm --filter bot build
+pnpm --filter api start
+pnpm --filter bot start
 ```
 
-Lint the Firefox build:
+The local API should be reachable at:
+
+```text
+http://127.0.0.1:3001
+```
+
+## Build the Firefox extension against the local API
+
+Run from the repo root:
 
 ```bash
+cd ~/prolific-telegram-alerts-firefox
+cd apps/extension
+VITE_API_BASE_URL=http://127.0.0.1:3001 npm run build:firefox
 npx web-ext lint --source-dir dist-firefox
 ```
 
-Package the Firefox build:
-
-```bash
-npx web-ext build --source-dir dist-firefox
-```
-
-Load the Firefox build temporarily:
+Load it temporarily in Firefox:
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click `Load Temporary Add-on...`
 3. Select `apps/extension/dist-firefox/manifest.json`
 
-If you self-host the API, set `VITE_API_BASE_URL` before building so the runtime API URL and manifest host permissions stay aligned.
-
-## CloudResearch local testing
-
-1. Build and load the Firefox extension:
+For local use, build the extension with:
 
 ```bash
-cd apps/extension
-npm install
-npm run build:firefox
-npx web-ext lint --source-dir dist-firefox
+VITE_API_BASE_URL=http://127.0.0.1:3001 npm run build:firefox
 ```
 
-2. In Firefox, open `about:debugging#/runtime/this-firefox`.
-3. Click `Load Temporary Add-on...`.
-4. Select `apps/extension/dist-firefox/manifest.json`.
-5. Open and sign in to:
+## Alert behavior
 
-```text
-https://connect.cloudresearch.com/participant/dashboard
-```
+### Prolific
 
-6. Keep the dashboard open on the `Available` view so visible project cards can be detected.
-7. Use the popup button `Send CloudResearch Test Alert` to verify the background/API/Telegram path.
-8. Optionally enable `Enable CloudResearch auto-refresh` in the popup. It is off by default and only refreshes the dashboard page every 10-15 seconds while you are not typing in a form field.
+- watches `https://app.prolific.com/studies`
+- sends Telegram alerts for visible studies
+- includes desktop/mobile device support when available
 
-## Detection notes
+### CloudResearch Connect
 
-- Prolific uses the existing deterministic DOM selectors and state-machine cache.
-- CloudResearch only reads visible project card text on the participant dashboard and extracts title, payment, estimated time, spots/places when visible, and a project URL when one is present.
-- If a CloudResearch project URL exposes a stable `/participant/project/<id>` path segment, that value is used as the project key.
-- If no stable ID is visible, the extension falls back to a deterministic key derived from:
+- watches `https://connect.cloudresearch.com/participant/dashboard`
+- sends Telegram alerts for visible projects
+- uses dashboard auto-refresh with randomized jitter at `10–15 seconds`
 
-```text
-cloudresearch:title:reward:time:url
-```
+## macOS local startup scripts
 
-## macOS local service startup
-
-This section is only for local macOS startup of `apps/api` and `apps/bot`. It is separate from Linux or production deployment.
-
-The local startup scripts live under `scripts/local/`:
+If `scripts/local` exists, you can use the local macOS startup helpers there:
 
 - `scripts/local/start-local-services.sh`
 - `scripts/local/stop-local-services.sh`
 - `scripts/local/install-macos-launch-agent.sh`
 - `scripts/local/uninstall-macos-launch-agent.sh`
 
-Before using them, create these env files yourself:
+This is separate from Linux or production deployment.
 
-- `apps/api/.env`
-- `apps/bot/.env`
-
-Do not commit those `.env` files. The scripts do not contain `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, or other secrets.
-
-The local service scripts run the compiled Node entrypoints, so build the API and bot first:
-
-```bash
-pnpm --filter api build
-pnpm --filter bot build
-```
-
-Install auto-start at login on macOS:
+Install auto-start at login:
 
 ```bash
 ./scripts/local/install-macos-launch-agent.sh
-```
-
-Start the local services manually:
-
-```bash
-./scripts/local/start-local-services.sh
 ```
 
 Stop the local services:
@@ -168,40 +151,27 @@ Stop the local services:
 ./scripts/local/stop-local-services.sh
 ```
 
-Disable auto-start and remove the LaunchAgent:
+Disable auto-start:
 
 ```bash
 ./scripts/local/uninstall-macos-launch-agent.sh
 ```
 
-Service logs are written to:
+Logs:
 
 - `~/Library/Logs/prolific-alerts-api.log`
 - `~/Library/Logs/prolific-alerts-bot.log`
 
-PID files are written to:
+## Packaging
 
-- `/tmp/prolific-alerts-api.pid`
-- `/tmp/prolific-alerts-bot.pid`
-
-The LaunchAgent plist is installed at:
-
-- `~/Library/LaunchAgents/com.brian.prolific-alerts-local.plist`
-
-## Mozilla submission notes
-
-Reviewer reproduction steps from `apps/extension`:
+Build a Firefox package:
 
 ```bash
-npm install
-npm run build:firefox
-npx web-ext lint --source-dir dist-firefox
+cd apps/extension
 npx web-ext build --source-dir dist-firefox
 ```
 
-## Creating a clean AMO source archive
-
-Run this from the repo root:
+Create a Mozilla source zip from the repo root:
 
 ```bash
 zip -r ~/prolific-telegram-alerts-firefox-source.zip . \
@@ -220,17 +190,19 @@ zip -r ~/prolific-telegram-alerts-firefox-source.zip . \
   -x "apps/extension/package-lock.json"
 ```
 
-Verify the archive contents:
+Regular Firefox requires a signed XPI for permanent installation. Unsigned builds are for temporary developer loading.
 
-```bash
-unzip -l ~/prolific-telegram-alerts-firefox-source.zip | grep -E "\.agents|\.DS_Store|node_modules|dist-firefox|web-ext-artifacts|package-lock" || echo "Clean source zip looks good"
-```
+## Troubleshooting
 
-## Contact
-
-- Original developer - `bog.kn (at) proton.me`
-- Firefox  port - `selfsabotage (at) proton.me`
+- Temporary Firefox add-ons disappear after restart:
+  reload the extension from `about:debugging`; this is normal for temporary installs.
+- Local API/bot must be running:
+  linking, status checks, and Telegram alerts depend on the local API and bot being up.
+- Do not commit `.env` files:
+  keep `DATABASE_URL`, bot tokens, usernames, and any API keys local only.
+- Telegram format looks stale:
+  restart the local API and bot after changing message formatting or backend alert code.
 
 ## License
 
-This project is released under an open-source license. Feel free to explore and learn from the code.
+This project remains based on the original open-source project. Review the upstream repository for original licensing context.

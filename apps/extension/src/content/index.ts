@@ -67,8 +67,8 @@ const REAPPEARED_BATCH_THRESHOLD = 2;
 
 const GBP_TO_USD = 1.35;
 
-const PROLIFIC_REFRESH_MIN_MS = 5 * 60_000;
-const PROLIFIC_REFRESH_MAX_MS = 8 * 60_000;
+const PROLIFIC_REFRESH_MIN_MS = 30_000;
+const PROLIFIC_REFRESH_MAX_MS = 40_000;
 const CLOUDRESEARCH_REFRESH_MIN_MS = 10_000;
 const CLOUDRESEARCH_REFRESH_MAX_MS = 15_000;
 
@@ -1367,7 +1367,7 @@ function observeDOM(): void {
 
 function isExactStudiesPage(): boolean {
   const url = new URL(window.location.href);
-  if (url.protocol === "file:" || !url.hostname.includes("prolific.com")) {
+  if (url.protocol === "file:" || url.hostname !== "app.prolific.com") {
     return false;
   }
 
@@ -1413,6 +1413,9 @@ function scheduleProlificAutoRefresh(): void {
   const delayMs =
     PROLIFIC_REFRESH_MIN_MS +
     Math.random() * (PROLIFIC_REFRESH_MAX_MS - PROLIFIC_REFRESH_MIN_MS);
+  console.log(
+    `${LOG_PREFIX} next refresh time: ${new Date(Date.now() + delayMs).toISOString()} provider=prolific`,
+  );
 
   const timeoutId = setTimeout(() => {
     if (!isContextValid()) {
@@ -1421,6 +1424,15 @@ function scheduleProlificAutoRefresh(): void {
     }
 
     if (!isExactStudiesPage()) return;
+
+    if (isTypingInEditableField()) {
+      console.log(
+        `${LOG_PREFIX} refresh skipped: user typing on provider=prolific studies page`,
+      );
+      scheduleProlificAutoRefresh();
+      return;
+    }
+
     window.location.reload();
   }, delayMs);
 
