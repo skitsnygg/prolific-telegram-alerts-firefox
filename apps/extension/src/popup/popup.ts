@@ -261,13 +261,15 @@ async function handleSendTestAlert() {
   testAlertBtn.textContent = "Sending...";
   testAlertResult.classList.add("hidden");
 
+  const fakeStudyId = `test-study-${Date.now()}`;
   const fakeStudy = {
     title: "Test Prolific Alert",
     reward: "£5.00",
     completionTime: "10 minutes",
     places: "99 places",
-    url: `https://app.prolific.com/studies/test-alert-${Date.now()}`,
+    url: `https://app.prolific.com/studies/${fakeStudyId}`,
     postedAt: new Date().toISOString(),
+    supportedDevices: ["Desktop", "Mobile"] as const,
     mobileSupported: true,
   };
 

@@ -8,6 +8,8 @@ import { auditLog, getCorrelationId } from "../lib/audit-log.js";
 
 const router: RouterType = Router();
 
+const supportedDeviceSchema = z.enum(["Desktop", "Tablet", "Mobile"]);
+
 const summaryRecent = new Map<string, number>();
 const SUMMARY_DEDUP_MS = 30 * 1000; // 30 seconds
 
@@ -21,6 +23,7 @@ function makeSummaryKey(
       completionTime?: string | null;
       places?: string | null;
       url: string;
+      supportedDevices?: ("Desktop" | "Tablet" | "Mobile")[];
       mobileSupported: boolean;
     }[];
   },
@@ -43,6 +46,7 @@ function claimSummary(
       completionTime?: string | null;
       places?: string | null;
       url: string;
+      supportedDevices?: ("Desktop" | "Tablet" | "Mobile")[];
       mobileSupported: boolean;
     }[];
   },
@@ -73,6 +77,7 @@ const summaryStudySchema = z.object({
   completionTime: z.string().nullish(),
   places: z.string().nullish(),
   url: z.string().url(),
+  supportedDevices: z.array(supportedDeviceSchema).max(3).default([]),
   mobileSupported: z.boolean().default(false),
 });
 

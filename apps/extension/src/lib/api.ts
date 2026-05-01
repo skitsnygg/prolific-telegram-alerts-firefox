@@ -3,6 +3,8 @@ import { runtime } from "./browser.js";
 
 const LOG = "[Prolific Alerts][API]";
 
+type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
+
 interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
@@ -72,6 +74,7 @@ export async function notifyStudy(
     places?: string | null;
     url: string;
     postedAt: string;
+    supportedDevices?: SupportedDevice[];
     mobileSupported: boolean;
   },
 ) {
@@ -94,6 +97,7 @@ export async function notifyStudyReappeared(
     places?: string | null;
     url: string;
     postedAt: string;
+    supportedDevices?: SupportedDevice[];
     mobileSupported: boolean;
   },
 ) {
@@ -120,6 +124,7 @@ export async function notifySummary(
       completionTime?: string | null;
       places?: string | null;
       url: string;
+      supportedDevices?: SupportedDevice[];
       mobileSupported: boolean;
     }[];
   },
@@ -147,6 +152,7 @@ export async function notifyReappearedSummary(
       completionTime?: string | null;
       places?: string | null;
       url: string;
+      supportedDevices?: SupportedDevice[];
       mobileSupported: boolean;
     }[];
   },

@@ -2,6 +2,52 @@ import { env } from "./env.js";
 
 const TELEGRAM_API = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
+type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
+
+function escapeHtml(value: string): string {
+  return value
+    .split("&")
+    .join("&amp;")
+    .split("<")
+    .join("&lt;")
+    .split(">")
+    .join("&gt;")
+    .split('"')
+    .join("&quot;");
+}
+
+function getSupportedDevices(study: {
+  supportedDevices?: SupportedDevice[];
+  mobileSupported?: boolean;
+}): SupportedDevice[] {
+  const canonicalOrder: SupportedDevice[] = ["Desktop", "Tablet", "Mobile"];
+  const explicit = study.supportedDevices ?? [];
+  const devices = canonicalOrder.filter(
+    (device) => explicit.indexOf(device) !== -1,
+  );
+
+  if (devices.length > 0) {
+    return devices;
+  }
+
+  return study.mobileSupported ? ["Mobile"] : [];
+}
+
+function formatDevicesLine(study: {
+  supportedDevices?: SupportedDevice[];
+  mobileSupported?: boolean;
+}, boldLabel: boolean = true): string | null {
+  const devices = getSupportedDevices(study);
+  if (devices.length === 0) return null;
+  const label = boldLabel ? `<b>Devices:</b>` : `Devices:`;
+  return `💻 ${label} ${devices.map(escapeHtml).join(", ")}`;
+}
+
+function formatStudyLink(url: string): string[] {
+  const safeUrl = escapeHtml(url);
+  return [`🔗 <b>Open study:</b>`, `<a href="${safeUrl}">${safeUrl}</a>`];
+}
+
 export async function sendTelegramMessage(chatId: string, text: string) {
   const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
@@ -30,27 +76,31 @@ export function formatStudyNotification(study: {
   places?: string | null;
   url: string;
   postedAt: string;
+  supportedDevices?: SupportedDevice[];
   mobileSupported?: boolean;
 }) {
   const lines = [
     `🔬 <b>New Study Available!</b>`,
     ``,
-    `💰 <b>Reward:</b> ${study.reward}`,
+    `📋 <b>Title:</b> ${escapeHtml(study.title)}`,
+    `💰 <b>Reward:</b> ${escapeHtml(study.reward)}`,
   ];
 
   if (study.completionTime) {
-    lines.push(`⏱ <b>Time:</b> ${study.completionTime}`);
+    lines.push(`⏱ <b>Time:</b> ${escapeHtml(study.completionTime)}`);
   }
 
   if (study.places) {
-    lines.push(`👥 <b>Places:</b> ${study.places}`);
+    lines.push(`👥 <b>Places:</b> ${escapeHtml(study.places)}`);
   }
 
-  lines.push(`📋 <b>Title:</b> ${study.title}`);
-
-  if (study.mobileSupported) {
-    lines.push(`📱 <b>Mobile supported</b> — <a href="${study.url}">open</a>`);
+  const devicesLine = formatDevicesLine(study);
+  if (devicesLine) {
+    lines.push(devicesLine);
   }
+
+  lines.push(``);
+  lines.push(...formatStudyLink(study.url));
 
   return lines.join("\n");
 }
@@ -62,27 +112,31 @@ export function formatStudyReappeared(study: {
   places?: string | null;
   url: string;
   postedAt: string;
+  supportedDevices?: SupportedDevice[];
   mobileSupported?: boolean;
 }) {
   const lines = [
     `🔄 <b>Study Re-appeared!</b>`,
     ``,
-    `💰 <b>Reward:</b> ${study.reward}`,
+    `📋 <b>Title:</b> ${escapeHtml(study.title)}`,
+    `💰 <b>Reward:</b> ${escapeHtml(study.reward)}`,
   ];
 
   if (study.completionTime) {
-    lines.push(`⏱ <b>Time:</b> ${study.completionTime}`);
+    lines.push(`⏱ <b>Time:</b> ${escapeHtml(study.completionTime)}`);
   }
 
   if (study.places) {
-    lines.push(`👥 <b>Places:</b> ${study.places}`);
+    lines.push(`👥 <b>Places:</b> ${escapeHtml(study.places)}`);
   }
 
-  lines.push(`📋 <b>Title:</b> ${study.title}`);
-
-  if (study.mobileSupported) {
-    lines.push(`📱 <b>Mobile supported</b> — <a href="${study.url}">open</a>`);
+  const devicesLine = formatDevicesLine(study);
+  if (devicesLine) {
+    lines.push(devicesLine);
   }
+
+  lines.push(``);
+  lines.push(...formatStudyLink(study.url));
 
   return lines.join("\n");
 }
@@ -95,6 +149,7 @@ export function formatStudiesSummary(
     completionTime?: string | null;
     places?: string | null;
     url: string;
+    supportedDevices?: SupportedDevice[];
     mobileSupported?: boolean;
   }[],
   options?: {
@@ -113,17 +168,20 @@ export function formatStudiesSummary(
     const study = topStudies[i]!;
     if (i > 0) lines.push(``); // empty line between studies
 
-    lines.push(`💰 ${study.reward}`);
+    lines.push(`📋 <b>Title:</b> ${escapeHtml(study.title)}`);
+    lines.push(`💰 ${escapeHtml(study.reward)}`);
     if (study.completionTime) {
-      lines.push(`⏱ ${study.completionTime}`);
+      lines.push(`⏱ ${escapeHtml(study.completionTime)}`);
     }
     if (study.places) {
-      lines.push(`👥 ${study.places}`);
+      lines.push(`👥 ${escapeHtml(study.places)}`);
     }
-    lines.push(`📋 ${study.title}`);
-    if (study.mobileSupported) {
-      lines.push(`📱 Mobile supported — <a href="${study.url}">open</a>`);
+    const devicesLine = formatDevicesLine(study, false);
+    if (devicesLine) {
+      lines.push(devicesLine);
     }
+    lines.push(``);
+    lines.push(...formatStudyLink(study.url));
   }
 
   const remaining = totalNew - topStudies.length;

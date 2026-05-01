@@ -25,8 +25,11 @@ interface StudyInfo {
   places: string | null;
   url: string;
   postedAt: string;
+  supportedDevices: SupportedDevice[];
   mobileSupported: boolean;
 }
+
+type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
 
 declare global {
   interface Window {
@@ -274,15 +277,37 @@ function parseStudyIdFromHref(href: string | null): string | null {
   return match?.[1] ?? null;
 }
 
+function buildStudyUrl(id: string | null, href: string | null): string {
+  if (id) {
+    return `${PROLIFIC_BASE_URL}/studies/${encodeURIComponent(id)}`;
+  }
+
+  if (href && href !== "#") {
+    return new URL(href, PROLIFIC_BASE_URL).toString();
+  }
+
+  return `${PROLIFIC_BASE_URL}/studies`;
+}
+
+function parseSupportedDevices(text: string | null): SupportedDevice[] {
+  if (!text) return [];
+
+  const devices: SupportedDevice[] = [];
+  if (/\bdesktop\b/i.test(text)) devices.push("Desktop");
+  if (/\btablet\b/i.test(text)) devices.push("Tablet");
+  if (/\bmobile\b/i.test(text)) devices.push("Mobile");
+  return devices;
+}
+
 function parseDomStudy(item: Element): StudyInfo | null {
   const rawTestId = item.getAttribute("data-testid");
   const titleAnchor = item.querySelector('[data-testid="title"] a');
+  const href = titleAnchor?.getAttribute("href")?.trim() ?? "";
 
   const id =
     parseStudyIdFromTestId(rawTestId) ||
-    parseStudyIdFromHref(titleAnchor?.getAttribute("href") ?? null);
+    parseStudyIdFromHref(href);
   if (!id) {
-    const href = titleAnchor?.getAttribute("href") ?? "";
     logSkipOnce(
       `no-id:${rawTestId ?? ""}:${href}`,
       `skip study card: no ID`,
@@ -312,15 +337,11 @@ function parseDomStudy(item: Element): StudyInfo | null {
   const places = readText(
     item.querySelector('[data-testid="study-tag-places"]'),
   );
-
-  const href = titleAnchor?.getAttribute("href")?.trim() ?? "";
-  const url =
-    href && href !== "#"
-      ? new URL(href, PROLIFIC_BASE_URL).toString()
-      : `${PROLIFIC_BASE_URL}/studies/${id}`;
+  const url = buildStudyUrl(id, href);
 
   const devicesText = readText(item.querySelector('[data-testid="devices"]'));
-  const mobileSupported = !!devicesText && /mobile/i.test(devicesText);
+  const supportedDevices = parseSupportedDevices(devicesText);
+  const mobileSupported = supportedDevices.includes("Mobile");
 
   return {
     id,
@@ -330,6 +351,7 @@ function parseDomStudy(item: Element): StudyInfo | null {
     places,
     url,
     postedAt: new Date().toISOString(),
+    supportedDevices,
     mobileSupported,
   };
 }
@@ -581,6 +603,7 @@ async function sendStudyDetected(study: StudyInfo): Promise<void> {
       places: study.places,
       url: study.url,
       postedAt: study.postedAt,
+      supportedDevices: study.supportedDevices,
       mobileSupported: study.mobileSupported,
     },
   });
@@ -602,6 +625,7 @@ async function sendStudyReappeared(study: StudyInfo): Promise<void> {
       places: study.places,
       url: study.url,
       postedAt: study.postedAt,
+      supportedDevices: study.supportedDevices,
       mobileSupported: study.mobileSupported,
     },
   });
@@ -639,6 +663,7 @@ async function sendStudiesSummary(
         completionTime: study.completionTime,
         places: study.places,
         url: study.url,
+        supportedDevices: study.supportedDevices,
         mobileSupported: study.mobileSupported,
       })),
     },
@@ -665,6 +690,7 @@ async function sendReappearedStudiesSummary(
         completionTime: study.completionTime,
         places: study.places,
         url: study.url,
+        supportedDevices: study.supportedDevices,
         mobileSupported: study.mobileSupported,
       })),
     },

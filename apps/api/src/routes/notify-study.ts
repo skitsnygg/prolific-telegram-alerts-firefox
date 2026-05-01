@@ -12,6 +12,8 @@ import { auditLog, getCorrelationId } from "../lib/audit-log.js";
 
 const router: RouterType = Router();
 
+const supportedDeviceSchema = z.enum(["Desktop", "Tablet", "Mobile"]);
+
 /**
  * Per-extensionId rate limiter (sliding window).
  * Prevents a single user from flooding Telegram regardless of IP.
@@ -56,6 +58,7 @@ const studySchema = z.object({
   places: z.string().nullish(),
   url: z.string().url(),
   postedAt: z.string(),
+  supportedDevices: z.array(supportedDeviceSchema).max(3).default([]),
   mobileSupported: z.boolean().default(false),
 });
 

@@ -344,6 +344,8 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 // ── Message handlers ────────────────────────────────────────────────────────
 
+type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
+
 interface StudyPayload {
   title: string;
   reward: string;
@@ -351,6 +353,7 @@ interface StudyPayload {
   places?: string | null;
   url: string;
   postedAt: string;
+  supportedDevices?: SupportedDevice[];
   mobileSupported: boolean;
 }
 
@@ -360,6 +363,7 @@ interface SummaryStudyPayload {
   completionTime?: string | null;
   places?: string | null;
   url: string;
+  supportedDevices?: SupportedDevice[];
   mobileSupported: boolean;
 }
 
