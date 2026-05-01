@@ -32,6 +32,8 @@ export const users = pgTable("users", {
 
   uninstallReasonMessage: text("uninstall_reason_message"),
 
+  isShadowbanned: boolean("is_shadowbanned").notNull().default(false),
+
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
