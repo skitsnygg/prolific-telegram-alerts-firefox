@@ -6,7 +6,7 @@ import {
 } from "../config.js";
 import { storage } from "./browser.js";
 
-const LOG = "[Prolific Alerts][Storage]";
+const LOG = "[Study Alerts][Storage]";
 
 /**
  * Get or generate a unique extension install ID.
@@ -33,9 +33,7 @@ export async function getExtensionId(): Promise<string> {
  * Save linking state after successful token confirmation.
  */
 export async function saveLinkedState(data: { token: string }) {
-  console.log(
-    `${LOG} 💾 saveLinkedState(): token=${data.token.slice(0, 8)}...`,
-  );
+  console.log(`${LOG} 💾 saveLinkedState(): persisting linked state`);
   await storage.local.set({
     [STORAGE_KEYS.TOKEN]: data.token,
     [STORAGE_KEYS.IS_LINKED]: true,
@@ -154,6 +152,31 @@ export async function getBeepEnabled(): Promise<boolean> {
 export async function setBeepEnabled(enabled: boolean): Promise<void> {
   console.log(`${LOG} 💾 setBeepEnabled(): ${enabled}`);
   await storage.local.set({ [STORAGE_KEYS.BEEP_ENABLED]: enabled });
+}
+
+/**
+ * Get whether CloudResearch dashboard auto-refresh is enabled. Defaults to false.
+ */
+export async function getCloudResearchAutoRefreshEnabled(): Promise<boolean> {
+  const result = await storage.local.get(
+    STORAGE_KEYS.CLOUDRESEARCH_AUTO_REFRESH_ENABLED,
+  );
+  const val = result[STORAGE_KEYS.CLOUDRESEARCH_AUTO_REFRESH_ENABLED];
+  const enabled = val === undefined ? false : (val as boolean);
+  console.log(`${LOG} 📖 getCloudResearchAutoRefreshEnabled(): ${enabled}`);
+  return enabled;
+}
+
+/**
+ * Set whether CloudResearch dashboard auto-refresh is enabled.
+ */
+export async function setCloudResearchAutoRefreshEnabled(
+  enabled: boolean,
+): Promise<void> {
+  console.log(`${LOG} 💾 setCloudResearchAutoRefreshEnabled(): ${enabled}`);
+  await storage.local.set({
+    [STORAGE_KEYS.CLOUDRESEARCH_AUTO_REFRESH_ENABLED]: enabled,
+  });
 }
 
 /**

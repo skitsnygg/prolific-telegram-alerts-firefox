@@ -11,15 +11,18 @@ import {
   setMinPlaces,
   getBeepEnabled,
   setBeepEnabled,
+  getCloudResearchAutoRefreshEnabled,
+  setCloudResearchAutoRefreshEnabled,
 } from "../lib/storage.js";
 import { confirmToken, checkStatus, ConnectionError } from "../lib/api.js";
 import { updateStatus } from "../lib/storage.js";
 import { action, sendRuntimeMessage, tabs } from "../lib/browser.js";
+import type { Provider, StudyPayload } from "../lib/alert-types.js";
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 
-const LOG = "[Prolific Alerts][Popup]";
+const LOG = "[Study Alerts][Popup]";
 
 const loadingSection = $("loading");
 const connectionErrorSection = $("connection-error");
@@ -31,7 +34,7 @@ const retryConnectionBtn = $<HTMLButtonElement>("retry-connection-btn");
 const errorMessage = $("error-message");
 const statusBadge = $("status-badge");
 const activeInfo = $("active-info");
-const prolificTabWarning = $("prolific-tab-warning");
+const dashboardTabWarning = $("dashboard-tab-warning");
 const settingsSection = $("settings-section");
 const minRewardSlider = $<HTMLInputElement>("min-reward-slider");
 const minRewardValue = $("min-reward-value");
@@ -41,6 +44,9 @@ const minPlacesSlider = $<HTMLInputElement>("min-places-slider");
 const minPlacesValue = $("min-places-value");
 const minPlacesRow = $("min-places-row");
 const beepToggle = $<HTMLInputElement>("beep-toggle");
+const cloudResearchAutoRefreshToggle = $<HTMLInputElement>(
+  "cloudresearch-auto-refresh-toggle",
+);
 
 /**
  * Initialize the popup.
@@ -137,13 +143,12 @@ async function showStatus() {
         activeInfo.classList.remove("hidden");
         console.log(`${LOG} ✅ User is ACTIVE`);
 
-        // Check if Prolific tab is open
-        await checkProlificTab();
+        await checkProviderTabs();
       } else {
         statusBadge.textContent = "Inactive";
         statusBadge.className = "badge expired";
         activeInfo.classList.add("hidden");
-        prolificTabWarning.classList.add("hidden");
+        dashboardTabWarning.classList.add("hidden");
         console.log(`${LOG} ⚠️ User status is INACTIVE`);
       }
 
@@ -254,27 +259,48 @@ type TestAlertResponse = {
  * real content-script detections.
  */
 async function handleSendTestAlert() {
-  const testAlertBtn = $<HTMLButtonElement>("test-alert-btn");
+  return handleSendProviderTestAlert("prolific");
+}
+
+async function handleSendCloudResearchTestAlert() {
+  return handleSendProviderTestAlert("cloudresearch");
+}
+
+async function handleSendProviderTestAlert(provider: Provider) {
+  const testAlertBtn = $<HTMLButtonElement>(
+    provider === "cloudresearch"
+      ? "cloudresearch-test-alert-btn"
+      : "test-alert-btn",
+  );
   const testAlertResult = $("test-alert-result");
 
   testAlertBtn.disabled = true;
   testAlertBtn.textContent = "Sending...";
   testAlertResult.classList.add("hidden");
 
-  const fakeStudyId = `test-study-${Date.now()}`;
-  const fakeStudy = {
-    title: "Test Prolific Alert",
-    reward: "£5.00",
+  const fakeStudyId = `${provider}-test-${Date.now()}`;
+  const fakeStudy: StudyPayload = {
+    provider,
+    title:
+      provider === "cloudresearch"
+        ? "Test CloudResearch Connect Alert"
+        : "Test Prolific Alert",
+    reward: provider === "cloudresearch" ? "$4.50" : "£5.00",
     completionTime: "10 minutes",
-    places: "99 places",
-    url: `https://app.prolific.com/studies/${fakeStudyId}`,
+    places: provider === "cloudresearch" ? "12 spots" : "99 places",
+    url:
+      provider === "cloudresearch"
+        ? `https://connect.cloudresearch.com/participant/project/${fakeStudyId}`
+        : `https://app.prolific.com/studies/${fakeStudyId}`,
     postedAt: new Date().toISOString(),
     supportedDevices: ["Desktop", "Mobile"] as const,
     mobileSupported: true,
   };
 
   try {
-    console.log(`${LOG} 🧪 Sending test alert through background pipeline`);
+    console.log(
+      `${LOG} 🧪 Sending ${provider} test alert through background pipeline`,
+    );
     const response = await sendRuntimeMessage<TestAlertResponse>({
       type: "STUDY_DETECTED",
       study: fakeStudy,
@@ -285,7 +311,7 @@ async function handleSendTestAlert() {
       testAlertResult.classList.add("success");
       testAlertResult.textContent = response.data?.deduplicated
         ? "Sent, but deduplicated by the API."
-        : "Test alert sent through the full pipeline.";
+        : `${provider === "cloudresearch" ? "CloudResearch" : "Prolific"} test alert sent through the full pipeline.`;
     } else {
       testAlertResult.classList.add("error");
       testAlertResult.textContent =
@@ -299,28 +325,35 @@ async function handleSendTestAlert() {
     console.error(`${LOG} ❌ Test alert failed:`, error);
   } finally {
     testAlertBtn.disabled = false;
-    testAlertBtn.textContent = "Send Test Alert";
+    testAlertBtn.textContent =
+      provider === "cloudresearch"
+        ? "Send CloudResearch Test Alert"
+        : "Send Prolific Test Alert";
   }
 }
 
 /**
- * Check if the user has a Prolific studies tab open.
+ * Check if the user has a supported dashboard tab open.
  */
-async function checkProlificTab() {
-  console.log(`${LOG} 🔍 Checking for open Prolific tabs...`);
+async function checkProviderTabs() {
+  console.log(`${LOG} 🔍 Checking for open provider tabs...`);
   try {
-    const prolificTabs = await tabs.query({
-      url: ["https://app.prolific.com/*", "https://www.prolific.com/*"],
+    const providerTabs = await tabs.query({
+      url: [
+        "https://app.prolific.com/*",
+        "https://www.prolific.com/*",
+        "https://connect.cloudresearch.com/*",
+      ],
     });
-    console.log(`${LOG} 🔍 Found ${prolificTabs.length} Prolific tab(s)`);
-    if (prolificTabs.length === 0) {
-      prolificTabWarning.classList.remove("hidden");
+    console.log(`${LOG} 🔍 Found ${providerTabs.length} provider tab(s)`);
+    if (providerTabs.length === 0) {
+      dashboardTabWarning.classList.remove("hidden");
     } else {
-      prolificTabWarning.classList.add("hidden");
+      dashboardTabWarning.classList.add("hidden");
     }
   } catch {
     // If tabs API not available, hide warning
-    prolificTabWarning.classList.add("hidden");
+    dashboardTabWarning.classList.add("hidden");
   }
 }
 
@@ -329,14 +362,16 @@ async function checkProlificTab() {
  */
 async function loadSettings() {
   console.log(`${LOG} ⚙️ Loading settings...`);
-  const [minReward, notifEnabled, minPlaces, beepEnabled] = await Promise.all([
+  const [minReward, notifEnabled, minPlaces, beepEnabled, cloudRefresh] =
+    await Promise.all([
     getMinReward(),
     getNotificationsEnabled(),
     getMinPlaces(),
     getBeepEnabled(),
+    getCloudResearchAutoRefreshEnabled(),
   ]);
   console.log(
-    `${LOG} ⚙️ Settings loaded: minReward=£${minReward.toFixed(2)}, notifications=${notifEnabled}, minPlaces=${minPlaces}, beep=${beepEnabled}`,
+    `${LOG} ⚙️ Settings loaded: minReward=£${minReward.toFixed(2)}, notifications=${notifEnabled}, minPlaces=${minPlaces}, beep=${beepEnabled}, cloudRefresh=${cloudRefresh}`,
   );
 
   minRewardSlider.value = String(minReward);
@@ -353,6 +388,7 @@ async function loadSettings() {
   minPlacesValue.textContent = String(minPlaces);
 
   beepToggle.checked = beepEnabled;
+  cloudResearchAutoRefreshToggle.checked = cloudRefresh;
 
   // Force toggle off and locked when access is inactive
   const state = await getLinkedState();
@@ -363,6 +399,7 @@ async function loadSettings() {
     minRewardRow.style.pointerEvents = "none";
     minPlacesRow.style.opacity = "0.4";
     minPlacesRow.style.pointerEvents = "none";
+    cloudResearchAutoRefreshToggle.disabled = true;
   }
 
   settingsSection.classList.remove("hidden");
@@ -425,6 +462,14 @@ beepToggle.addEventListener("change", () => {
   console.log(`[Settings] Beep ${enabled ? "enabled" : "disabled"}`);
 });
 
+cloudResearchAutoRefreshToggle.addEventListener("change", () => {
+  const enabled = cloudResearchAutoRefreshToggle.checked;
+  setCloudResearchAutoRefreshEnabled(enabled);
+  console.log(
+    `[Settings] CloudResearch auto-refresh ${enabled ? "enabled" : "disabled"}`,
+  );
+});
+
 // Beep try button
 const beepTryBtn = $<HTMLButtonElement>("beep-try-btn");
 beepTryBtn.addEventListener("click", () => {
@@ -480,6 +525,16 @@ if (qrCode) {
 const testAlertBtn = document.getElementById("test-alert-btn");
 if (testAlertBtn) {
   testAlertBtn.addEventListener("click", handleSendTestAlert);
+}
+
+const cloudResearchTestAlertBtn = document.getElementById(
+  "cloudresearch-test-alert-btn",
+);
+if (cloudResearchTestAlertBtn) {
+  cloudResearchTestAlertBtn.addEventListener(
+    "click",
+    handleSendCloudResearchTestAlert,
+  );
 }
 
 // Initialize

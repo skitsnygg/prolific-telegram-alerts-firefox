@@ -13,6 +13,7 @@ import { auditLog, getCorrelationId } from "../lib/audit-log.js";
 const router: RouterType = Router();
 
 const supportedDeviceSchema = z.enum(["Desktop", "Tablet", "Mobile"]);
+const providerSchema = z.enum(["prolific", "cloudresearch"]);
 
 /**
  * Per-extensionId rate limiter (sliding window).
@@ -52,6 +53,7 @@ setInterval(
 );
 
 const studySchema = z.object({
+  provider: providerSchema.default("prolific"),
   title: z.string().min(1),
   reward: z.string().min(1),
   completionTime: z.string().nullish(),
@@ -201,7 +203,7 @@ router.post("/notify-study", async (req, res) => {
     }
 
     console.log(
-      `[API] 👤 User found: id=${user.id}, telegramId=${user.telegramId}`,
+      `[API] 👤 User found: id=${user.id}, telegramLinked=${Boolean(user.telegramId)}`,
     );
 
     // Shadowban check — silently pretend success
@@ -240,7 +242,10 @@ router.post("/notify-study", async (req, res) => {
     // how many extension instances are open.
     // Re-appeared studies bypass dedup entirely.
     if (!reappeared) {
-      const wasDuplicate = claimStudy(study.url, user.telegramId);
+      const wasDuplicate = claimStudy(
+        `${study.provider}::${study.url}`,
+        user.telegramId,
+      );
       if (wasDuplicate) {
         const resp = {
           success: true,
@@ -257,6 +262,7 @@ router.post("/notify-study", async (req, res) => {
           userId: user.id,
           telegramId: user.telegramId ?? undefined,
           extensionId,
+          provider: study.provider,
           notificationType: "NEW",
           studyUrl: study.url,
           studyTitle: study.title,
@@ -273,7 +279,7 @@ router.post("/notify-study", async (req, res) => {
       }
     } else {
       const wasDuplicateReappeared = claimReappeared(
-        study.url,
+        `${study.provider}::${study.url}`,
         user.telegramId,
       );
       if (wasDuplicateReappeared) {
@@ -292,6 +298,7 @@ router.post("/notify-study", async (req, res) => {
           userId: user.id,
           telegramId: user.telegramId ?? undefined,
           extensionId,
+          provider: study.provider,
           notificationType: "REAPPEARED",
           studyUrl: study.url,
           studyTitle: study.title,
@@ -319,14 +326,14 @@ router.post("/notify-study", async (req, res) => {
         ? formatStudyReappeared(study)
         : formatStudyNotification(study);
       console.log(
-        `[API] 📨 Sending Telegram notification to ${user.telegramId}${reappeared ? " (re-appeared)" : ""}...`,
+        `[API] 📨 Sending Telegram notification${reappeared ? " (re-appeared)" : ""}...`,
       );
       await sendTelegramMessage(user.telegramId, message);
       console.log(`[API] ✅ Telegram message sent successfully`);
     } catch (sendError) {
       // Unclaim so a retry can succeed (only if we claimed)
       if (!reappeared) {
-        unclaimStudy(study.url, user.telegramId);
+        unclaimStudy(`${study.provider}::${study.url}`, user.telegramId);
       }
       throw sendError;
     }
@@ -346,7 +353,7 @@ router.post("/notify-study", async (req, res) => {
       data: { deduplicated: false },
     };
     console.log(
-      `[API] ✅ notify-study SUCCESS: sent "${study.title}" (${study.reward}) to Telegram user ${user.telegramId} — responding:`,
+      `[API] ✅ notify-study SUCCESS: sent "${study.title}" (${study.reward}) — responding:`,
       JSON.stringify(resp),
     );
     auditLog({
@@ -355,6 +362,7 @@ router.post("/notify-study", async (req, res) => {
       userId: user.id,
       telegramId: user.telegramId ?? undefined,
       extensionId,
+      provider: study.provider,
       notificationType: reappeared ? "REAPPEARED" : "NEW",
       studyUrl: study.url,
       studyTitle: study.title,

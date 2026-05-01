@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prolific Telegram Alerts</title>
+    <title>Study Alerts</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <div class="container">
       <header>
-        <h1>🔬 Prolific Alerts</h1>
+        <h1>🔔 Study Alerts</h1>
       </header>
 
       <!-- Connection Error section (shown when API is unreachable) -->
@@ -86,27 +86,37 @@
         <div id="active-info" class="info-notice hidden">
           <p>🔔 You'll get notified of new studies via Telegram.</p>
           <p class="info-detail">
-            Keep your browser on with
-            <strong>app.prolific.com/studies</strong> open in a background tab
-            for the extension to detect new studies.
+            Keep <strong>app.prolific.com/studies</strong> or
+            <strong>connect.cloudresearch.com/participant/dashboard</strong>
+            open in a background tab so the extension can detect visible
+            studies and projects.
           </p>
         </div>
 
-        <!-- Prolific tab warning -->
-        <div id="prolific-tab-warning" class="warning-notice hidden">
-          <p>⚠️ <strong>Prolific is not open</strong></p>
+        <!-- Dashboard tab warning -->
+        <div id="dashboard-tab-warning" class="warning-notice hidden">
+          <p>⚠️ <strong>No supported dashboard tab is open</strong></p>
           <p class="warning-detail">
             Open
             <a href="https://app.prolific.com/studies" target="_blank"
               >app.prolific.com/studies</a
             >
-            in a tab to start detecting studies.
+            or
+            <a
+              href="https://connect.cloudresearch.com/participant/dashboard"
+              target="_blank"
+              >connect.cloudresearch.com/participant/dashboard</a
+            >
+            in a tab to start detecting studies and projects.
           </p>
         </div>
 
         <div class="debug-section">
           <button id="test-alert-btn" class="debug-btn">
-            Send Test Alert
+            Send Prolific Test Alert
+          </button>
+          <button id="cloudresearch-test-alert-btn" class="debug-btn secondary">
+            Send CloudResearch Test Alert
           </button>
           <div id="test-alert-result" class="emulate-result hidden"></div>
         </div>
@@ -177,6 +187,23 @@
             <p class="setting-hint">
               Studies with fewer available places will be ignored.
             </p>
+          </div>
+
+          <div class="setting-row setting-row-inline" id="cloudresearch-refresh-row">
+            <div>
+              <div class="setting-label">Enable CloudResearch auto-refresh</div>
+              <p class="setting-hint">
+                Reloads the Connect dashboard every 10-15 seconds while you are
+                not typing on the page.
+              </p>
+            </div>
+            <label class="toggle-switch">
+              <input
+                type="checkbox"
+                id="cloudresearch-auto-refresh-toggle"
+              />
+              <span class="toggle-slider"></span>
+            </label>
           </div>
         </div>
       </section>

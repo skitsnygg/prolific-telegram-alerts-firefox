@@ -1,9 +1,11 @@
 import { API_BASE_URL } from "../config.js";
 import { runtime } from "./browser.js";
+import type {
+  StudyPayload,
+  SummaryPayload,
+} from "./alert-types.js";
 
-const LOG = "[Prolific Alerts][API]";
-
-type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
+const LOG = "[Study Alerts][API]";
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -25,7 +27,11 @@ async function apiRequest<T>(
   body: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
-  console.log(`${LOG} ➔ POST ${url}`, JSON.stringify(body));
+  const logBody =
+    endpoint === "/api/confirm-token"
+      ? { ...body, token: "[redacted]" }
+      : body;
+  console.log(`${LOG} ➔ POST ${url}`, JSON.stringify(logBody));
   try {
     const startTime = performance.now();
     const response = await fetch(url, {
@@ -57,7 +63,7 @@ async function apiRequest<T>(
  */
 export async function confirmToken(token: string, extensionId: string) {
   console.log(
-    `${LOG} 🎫 confirmToken() — token=${token.slice(0, 8)}..., extId=${extensionId.slice(0, 8)}...`,
+    `${LOG} 🎫 confirmToken() — tokenLength=${token.length}, extId=${extensionId.slice(0, 8)}...`,
   );
   return apiRequest<unknown>("/api/confirm-token", { token, extensionId });
 }
@@ -67,18 +73,11 @@ export async function confirmToken(token: string, extensionId: string) {
  */
 export async function notifyStudy(
   extensionId: string,
-  study: {
-    title: string;
-    reward: string;
-    completionTime?: string | null;
-    places?: string | null;
-    url: string;
-    postedAt: string;
-    supportedDevices?: SupportedDevice[];
-    mobileSupported: boolean;
-  },
+  study: StudyPayload,
 ) {
-  console.log(`${LOG} 📢 notifyStudy() — "${study.title}" (${study.reward})`);
+  console.log(
+    `${LOG} 📢 notifyStudy() — provider=${study.provider} "${study.title}" (${study.reward})`,
+  );
   return apiRequest<{ deduplicated: boolean }>("/api/notify-study", {
     extensionId,
     study,
@@ -90,19 +89,10 @@ export async function notifyStudy(
  */
 export async function notifyStudyReappeared(
   extensionId: string,
-  study: {
-    title: string;
-    reward: string;
-    completionTime?: string | null;
-    places?: string | null;
-    url: string;
-    postedAt: string;
-    supportedDevices?: SupportedDevice[];
-    mobileSupported: boolean;
-  },
+  study: StudyPayload,
 ) {
   console.log(
-    `${LOG} 🔄 notifyStudyReappeared() — "${study.title}" (${study.reward})`,
+    `${LOG} 🔄 notifyStudyReappeared() — provider=${study.provider} "${study.title}" (${study.reward})`,
   );
   return apiRequest<{ deduplicated: boolean }>("/api/notify-study", {
     extensionId,
@@ -116,22 +106,11 @@ export async function notifyStudyReappeared(
  */
 export async function notifySummary(
   extensionId: string,
-  summary: {
-    totalNew: number;
-    topStudies: {
-      title: string;
-      reward: string;
-      completionTime?: string | null;
-      places?: string | null;
-      url: string;
-      supportedDevices?: SupportedDevice[];
-      mobileSupported: boolean;
-    }[];
-  },
+  summary: SummaryPayload,
 ) {
   const bestTitle = summary.topStudies[0]?.title ?? "N/A";
   console.log(
-    `${LOG} 📊 notifySummary() — ${summary.totalNew} studies, best="${bestTitle}"`,
+    `${LOG} 📊 notifySummary() — provider=${summary.provider} count=${summary.totalNew}, best="${bestTitle}"`,
   );
   return apiRequest("/api/notify-summary", {
     extensionId,
@@ -144,22 +123,11 @@ export async function notifySummary(
  */
 export async function notifyReappearedSummary(
   extensionId: string,
-  summary: {
-    totalNew: number;
-    topStudies: {
-      title: string;
-      reward: string;
-      completionTime?: string | null;
-      places?: string | null;
-      url: string;
-      supportedDevices?: SupportedDevice[];
-      mobileSupported: boolean;
-    }[];
-  },
+  summary: SummaryPayload,
 ) {
   const bestTitle = summary.topStudies[0]?.title ?? "N/A";
   console.log(
-    `${LOG} 📊 notifyReappearedSummary() — ${summary.totalNew} studies, best="${bestTitle}"`,
+    `${LOG} 📊 notifyReappearedSummary() — provider=${summary.provider} count=${summary.totalNew}, best="${bestTitle}"`,
   );
   return apiRequest("/api/notify-summary", {
     extensionId,

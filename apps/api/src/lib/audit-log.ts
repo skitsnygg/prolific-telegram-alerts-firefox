@@ -6,6 +6,7 @@ type AuditEventType =
   | "EXTENSION_UNLINK_COMMAND";
 
 type NotificationType = "NEW" | "SUMMARY" | "REAPPEARED";
+type Provider = "prolific" | "cloudresearch";
 
 type AuditEvent = {
   eventType: AuditEventType;
@@ -14,6 +15,7 @@ type AuditEvent = {
   telegramId?: string;
   extensionId?: string;
   notificationType?: NotificationType;
+  provider?: Provider;
   errorCode?: string;
   message?: string;
   correlationId?: string;

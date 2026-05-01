@@ -9,6 +9,7 @@ import { auditLog, getCorrelationId } from "../lib/audit-log.js";
 const router: RouterType = Router();
 
 const supportedDeviceSchema = z.enum(["Desktop", "Tablet", "Mobile"]);
+const providerSchema = z.enum(["prolific", "cloudresearch"]);
 
 const summaryRecent = new Map<string, number>();
 const SUMMARY_DEDUP_MS = 30 * 1000; // 30 seconds
@@ -16,6 +17,7 @@ const SUMMARY_DEDUP_MS = 30 * 1000; // 30 seconds
 function makeSummaryKey(
   telegramId: string,
   summary: {
+    provider: "prolific" | "cloudresearch";
     totalNew: number;
     topStudies: {
       title: string;
@@ -33,12 +35,13 @@ function makeSummaryKey(
     .map((s) => s.url)
     .sort()
     .join("|");
-  return `${telegramId}::${reappeared ? "reappeared" : "new"}::${summary.totalNew}::${urls}`;
+  return `${telegramId}::${summary.provider}::${reappeared ? "reappeared" : "new"}::${summary.totalNew}::${urls}`;
 }
 
 function claimSummary(
   telegramId: string,
   summary: {
+    provider: "prolific" | "cloudresearch";
     totalNew: number;
     topStudies: {
       title: string;
@@ -85,6 +88,7 @@ const summarySchema = z.object({
   extensionId: z.string().min(1, "Extension ID is required"),
   reappeared: z.boolean().optional().default(false),
   summary: z.object({
+    provider: providerSchema.default("prolific"),
     totalNew: z.number().int().min(1),
     topStudies: z.array(summaryStudySchema).min(1).max(5),
   }),
@@ -172,6 +176,7 @@ router.post("/notify-summary", async (req, res) => {
         userId: user.id,
         telegramId: user.telegramId ?? undefined,
         extensionId,
+        provider: summary.provider,
         notificationType: "SUMMARY",
         summaryTotalNew: summary.totalNew,
         summaryStudyUrls: summary.topStudies.map((s) => s.url).join(" | "),
@@ -188,11 +193,16 @@ router.post("/notify-summary", async (req, res) => {
     }
 
     // Send Telegram summary notification
-    const message = formatStudiesSummary(summary.totalNew, summary.topStudies, {
-      reappeared,
-    });
+    const message = formatStudiesSummary(
+      summary.provider,
+      summary.totalNew,
+      summary.topStudies,
+      {
+        reappeared,
+      },
+    );
     console.log(
-      `[API] 📨 Sending summary Telegram notification to ${user.telegramId}...`,
+      `[API] 📨 Sending summary Telegram notification...`,
     );
     await sendTelegramMessage(user.telegramId, message);
     console.log(`[API] ✅ Summary Telegram message sent successfully`);
@@ -212,7 +222,7 @@ router.post("/notify-summary", async (req, res) => {
       data: { deduplicated: false },
     };
     console.log(
-      `[API] ✅ notify-summary SUCCESS: sent summary (${summary.totalNew} studies) to Telegram user ${user.telegramId}`,
+      `[API] ✅ notify-summary SUCCESS: sent summary (${summary.totalNew} studies)`,
     );
     auditLog({
       eventType: "NOTIFICATION_SENT",
@@ -220,6 +230,7 @@ router.post("/notify-summary", async (req, res) => {
       userId: user.id,
       telegramId: user.telegramId ?? undefined,
       extensionId,
+      provider: summary.provider,
       notificationType: "SUMMARY",
       summaryTotalNew: summary.totalNew,
       summaryStudyUrls: summary.topStudies.map((s) => s.url).join(" | "),

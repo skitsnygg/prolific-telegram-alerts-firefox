@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prolific Telegram Alerts",
-  "description": "Get instant Telegram notifications when new paid studies appear on Prolific.",
+  "description": "Get instant Telegram notifications when new paid studies or projects appear on Prolific and CloudResearch Connect.",
   "version": "1.2.3",
   "permissions": [
     "storage",
@@ -14,6 +14,7 @@
   "host_permissions": [
     "https://www.prolific.com/*",
     "https://app.prolific.com/*",
+    "https://connect.cloudresearch.com/*",
     "https://prolificapi.notifyme.top/*",
     "file:///*"
   ],
@@ -23,7 +24,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.prolific.com/*", "https://app.prolific.com/*"],
+      "matches": [
+        "https://www.prolific.com/*",
+        "https://app.prolific.com/*",
+        "https://connect.cloudresearch.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     },

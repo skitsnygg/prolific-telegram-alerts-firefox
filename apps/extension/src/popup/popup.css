@@ -355,8 +355,20 @@ header h1 {
   transition: background 0.2s;
 }
 
+.debug-btn + .debug-btn {
+  margin-top: 8px;
+}
+
 .debug-btn:hover {
   background: #6b46c1;
+}
+
+.debug-btn.secondary {
+  background: #2563eb;
+}
+
+.debug-btn.secondary:hover {
+  background: #1d4ed8;
 }
 
 .debug-btn:disabled {

@@ -33,4 +33,5 @@ export const STORAGE_KEYS = {
   NOTIFICATIONS_ENABLED: "notificationsEnabled",
   MIN_PLACES: "minPlaces",
   BEEP_ENABLED: "beepEnabled",
+  CLOUDRESEARCH_AUTO_REFRESH_ENABLED: "cloudResearchAutoRefreshEnabled",
 } as const;

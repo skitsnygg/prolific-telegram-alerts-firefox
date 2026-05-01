@@ -24,8 +24,13 @@ import {
   supportsOffscreenAudio,
   tabs,
 } from "../lib/browser.js";
+import type {
+  Provider,
+  StudyPayload,
+  SummaryPayload,
+} from "../lib/alert-types.js";
 
-const LOG = "[Prolific Alerts][BG]";
+const LOG = "[Study Alerts][BG]";
 const STATUS_ALARM_NAME = "status-check";
 let beepFallbackWarned = false;
 
@@ -72,12 +77,42 @@ async function playBeepAlert(): Promise<void> {
   await playBeepViaOffscreen();
 }
 
-/** Prolific URL patterns matching the manifest content_scripts. */
-const PROLIFIC_URLS = [
+/** URL patterns matching the manifest content_scripts. */
+const PROVIDER_URLS = [
   "https://www.prolific.com/*",
   "https://app.prolific.com/*",
+  "https://connect.cloudresearch.com/*",
   "file:///*test-page*",
 ];
+
+function getProviderItemLabel(provider: Provider): string {
+  return provider === "cloudresearch" ? "Project" : "Study";
+}
+
+function getNewNotificationTitle(provider: Provider): string {
+  return provider === "cloudresearch"
+    ? "New CloudResearch Connect Project!"
+    : "New Prolific Study!";
+}
+
+function getReappearedNotificationTitle(provider: Provider): string {
+  return provider === "cloudresearch"
+    ? "CloudResearch Project Re-appeared!"
+    : "Study Re-appeared!";
+}
+
+function getSummaryNotificationTitle(
+  provider: Provider,
+  reappeared: boolean,
+): string {
+  if (provider === "cloudresearch") {
+    return reappeared
+      ? "CloudResearch Projects Re-appeared!"
+      : "New CloudResearch Projects!";
+  }
+
+  return reappeared ? "Re-appeared Studies!" : "New Studies Available!";
+}
 
 /**
  * Inject the content script into any already-open Prolific tabs.
@@ -85,12 +120,12 @@ const PROLIFIC_URLS = [
  */
 async function injectIntoExistingTabs(): Promise<void> {
   console.log(
-    `${LOG} 🔌 Injecting content script into existing Prolific tabs...`,
+    `${LOG} 🔌 Injecting content script into existing provider tabs...`,
   );
   try {
-    const openTabs = await tabs.query({ url: PROLIFIC_URLS });
+    const openTabs = await tabs.query({ url: PROVIDER_URLS });
     console.log(
-      `${LOG} 🔌 Found ${openTabs.length} existing Prolific tab(s) to inject into`,
+      `${LOG} 🔌 Found ${openTabs.length} existing provider tab(s) to inject into`,
     );
     for (const tab of openTabs) {
       if (!tab.id) continue;
@@ -171,6 +206,9 @@ runtime.onStartup.addListener(async () => {
   // Run status check immediately on startup
   console.log(`${LOG} 🔑 Running startup status check...`);
   await performStatusCheck();
+
+  // Re-inject content script into restored/open provider tabs on browser startup
+  await injectIntoExistingTabs();
   console.log(`${LOG} 🚀 onStartup setup complete`);
 });
 
@@ -344,40 +382,12 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 // ── Message handlers ────────────────────────────────────────────────────────
 
-type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
-
-interface StudyPayload {
-  title: string;
-  reward: string;
-  completionTime?: string | null;
-  places?: string | null;
-  url: string;
-  postedAt: string;
-  supportedDevices?: SupportedDevice[];
-  mobileSupported: boolean;
-}
-
-interface SummaryStudyPayload {
-  title: string;
-  reward: string;
-  completionTime?: string | null;
-  places?: string | null;
-  url: string;
-  supportedDevices?: SupportedDevice[];
-  mobileSupported: boolean;
-}
-
-interface SummaryPayload {
-  totalNew: number;
-  topStudies: SummaryStudyPayload[];
-}
-
 /**
  * Handle a new study detected by the content script.
  */
 async function handleStudyDetected(study: StudyPayload) {
   console.log(
-    `${LOG} 📋 handleStudyDetected(): "${study.title}" — ${study.reward}`,
+    `${LOG} 📋 handleStudyDetected(): provider=${study.provider} "${study.title}" — ${study.reward}`,
   );
   const extensionId = await getExtensionId();
 
@@ -388,11 +398,13 @@ async function handleStudyDetected(study: StudyPayload) {
   );
 
   if (response.success && !response.data?.deduplicated) {
-    console.log(`${LOG} 🔔 Showing Chrome notification for "${study.title}"`);
+    console.log(
+      `${LOG} 🔔 Showing browser notification for provider=${study.provider} "${study.title}"`,
+    );
     notifications.create(`study-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: "New Prolific Study!",
+      title: getNewNotificationTitle(study.provider),
       message: `${study.title} — ${study.reward}`,
     });
 
@@ -414,7 +426,7 @@ async function handleStudyDetected(study: StudyPayload) {
  */
 async function handleStudyReappeared(study: StudyPayload) {
   console.log(
-    `${LOG} 🔄 handleStudyReappeared(): "${study.title}" — ${study.reward}`,
+    `${LOG} 🔄 handleStudyReappeared(): provider=${study.provider} "${study.title}" — ${study.reward}`,
   );
   const extensionId = await getExtensionId();
 
@@ -425,12 +437,12 @@ async function handleStudyReappeared(study: StudyPayload) {
 
   if (response.success) {
     console.log(
-      `${LOG} 🔔 Showing Chrome notification for re-appeared "${study.title}"`,
+      `${LOG} 🔔 Showing browser notification for re-appeared provider=${study.provider} "${study.title}"`,
     );
     notifications.create(`study-reappeared-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: "🔄 Study Re-appeared!",
+      title: `🔄 ${getReappearedNotificationTitle(study.provider)}`,
       message: `${study.title} — ${study.reward}`,
     });
 
@@ -448,7 +460,7 @@ async function handleStudyReappeared(study: StudyPayload) {
  */
 async function handleStudiesSummary(summary: SummaryPayload) {
   console.log(
-    `${LOG} 📊 handleStudiesSummary(): ${summary.totalNew} studies, top ${summary.topStudies.length} included`,
+    `${LOG} 📊 handleStudiesSummary(): provider=${summary.provider} count=${summary.totalNew}, top ${summary.topStudies.length} included`,
   );
   const extensionId = await getExtensionId();
 
@@ -461,8 +473,8 @@ async function handleStudiesSummary(summary: SummaryPayload) {
     notifications.create(`studies-summary-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: "📊 New Studies Available!",
-      message: `${summary.totalNew} new studies. Best: ${bestTitle} — ${bestReward}`,
+      title: `📊 ${getSummaryNotificationTitle(summary.provider, false)}`,
+      message: `${summary.totalNew} new ${getProviderItemLabel(summary.provider).toLowerCase()}${summary.totalNew === 1 ? "" : "s"}. Best: ${bestTitle} — ${bestReward}`,
     });
 
     const beepOn = await getBeepEnabled();
@@ -479,7 +491,7 @@ async function handleStudiesSummary(summary: SummaryPayload) {
  */
 async function handleStudiesReappearedSummary(summary: SummaryPayload) {
   console.log(
-    `${LOG} 📊 handleStudiesReappearedSummary(): ${summary.totalNew} studies, top ${summary.topStudies.length} included`,
+    `${LOG} 📊 handleStudiesReappearedSummary(): provider=${summary.provider} count=${summary.totalNew}, top ${summary.topStudies.length} included`,
   );
   const extensionId = await getExtensionId();
 
@@ -494,8 +506,8 @@ async function handleStudiesReappearedSummary(summary: SummaryPayload) {
     notifications.create(`studies-reappeared-summary-${Date.now()}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: "🔄 Re-appeared Studies!",
-      message: `${summary.totalNew} re-appeared studies. Best: ${bestTitle} — ${bestReward}`,
+      title: `🔄 ${getSummaryNotificationTitle(summary.provider, true)}`,
+      message: `${summary.totalNew} re-appeared ${getProviderItemLabel(summary.provider).toLowerCase()}${summary.totalNew === 1 ? "" : "s"}. Best: ${bestTitle} — ${bestReward}`,
     });
 
     const beepOn = await getBeepEnabled();

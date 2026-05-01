@@ -28,7 +28,7 @@ router.post("/confirm-token", async (req, res) => {
       req.headers as Record<string, unknown>,
     );
     console.log(
-      `[API] POST /api/confirm-token — token=${token}, extensionId=${extensionId}`,
+      `[API] POST /api/confirm-token — tokenLength=${token.length}, extensionId=${extensionId}`,
     );
 
     // Find user by telegram token (telegramId)
@@ -38,9 +38,7 @@ router.post("/confirm-token", async (req, res) => {
       .where(eq(users.telegramId, token));
 
     if (!user) {
-      console.log(
-        `[API] confirm-token FAILED: token=${token} not found in database`,
-      );
+      console.log(`[API] confirm-token FAILED: token not found in database`);
       auditLog({
         eventType: "EXTENSION_LINK_ERROR",
         success: false,
@@ -65,7 +63,7 @@ router.post("/confirm-token", async (req, res) => {
       user.extensionInstallId !== extensionId;
     if (isLinked) {
       console.log(
-        `[API] confirm-token FAILED: token=${token} already linked to extension=${user.extensionInstallId}`,
+        `[API] confirm-token FAILED: token already linked to extension=${user.extensionInstallId}`,
       );
       auditLog({
         eventType: "EXTENSION_LINK_ERROR",
@@ -116,7 +114,7 @@ router.post("/confirm-token", async (req, res) => {
     await db.update(users).set(updateData).where(eq(users.id, user.id));
 
     console.log(
-      `[API] confirm-token SUCCESS: token=${token} linked to extension=${extensionId}`,
+      `[API] confirm-token SUCCESS: token linked to extension=${extensionId}`,
     );
     auditLog({
       eventType: "EXTENSION_LINK_SUCCESS",
@@ -134,9 +132,9 @@ router.post("/confirm-token", async (req, res) => {
           user.telegramId,
           `🎉 <b>Extension linked!</b>\n` +
             `\n` +
-            `You'll receive notifications here whenever a new study appears on Prolific.\n` +
+            `You'll receive notifications here whenever a new study appears on Prolific or a new project appears on CloudResearch Connect.\n` +
             `\n` +
-            `Please remember to keep Prolific tab open in your browser.\n` +
+            `Please remember to keep a supported dashboard tab open in your browser.\n` +
             `<b>Available commands:</b>\n` +
             `/token — Get your linking token\n` +
             `/status — Check your status\n` +

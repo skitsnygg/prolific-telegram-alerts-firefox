@@ -3,6 +3,19 @@ import { env } from "./env.js";
 const TELEGRAM_API = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
 type SupportedDevice = "Desktop" | "Tablet" | "Mobile";
+type Provider = "prolific" | "cloudresearch";
+
+type ProviderStudy = {
+  provider?: Provider;
+  title: string;
+  reward: string;
+  completionTime?: string | null;
+  places?: string | null;
+  url: string;
+  postedAt?: string;
+  supportedDevices?: SupportedDevice[];
+  mobileSupported?: boolean;
+};
 
 function escapeHtml(value: string): string {
   return value
@@ -43,9 +56,61 @@ function formatDevicesLine(study: {
   return `💻 ${label} ${devices.map(escapeHtml).join(", ")}`;
 }
 
-function formatStudyLink(url: string): string[] {
+function getProvider(study: { provider?: Provider }): Provider {
+  return study.provider ?? "prolific";
+}
+
+function getNewHeader(provider: Provider): string {
+  return provider === "cloudresearch"
+    ? `☁️ <b>New CloudResearch Connect Project</b>`
+    : `🔬 <b>New Study Available!</b>`;
+}
+
+function getReappearedHeader(provider: Provider): string {
+  return provider === "cloudresearch"
+    ? `🔄 <b>CloudResearch Connect Project Re-appeared</b>`
+    : `🔄 <b>Study Re-appeared!</b>`;
+}
+
+function getSummaryHeader(
+  provider: Provider,
+  totalNew: number,
+  reappeared: boolean,
+): string {
+  if (provider === "cloudresearch") {
+    const noun = totalNew === 1 ? "Project" : "Projects";
+    return reappeared
+      ? `🔄 <b>${totalNew} CloudResearch Connect ${noun} Re-appeared</b>`
+      : `📊 <b>${totalNew} New CloudResearch Connect ${noun}</b>`;
+  }
+
+  return reappeared
+    ? `🔄 <b>${totalNew} Re-appeared Studies Available!</b>`
+    : `📊 <b>${totalNew} New Studies Available!</b>`;
+}
+
+function getTitleLabel(provider: Provider): string {
+  return provider === "cloudresearch" ? "Project" : "Title";
+}
+
+function getRewardLabel(provider: Provider): string {
+  return provider === "cloudresearch" ? "Payment" : "Reward";
+}
+
+function getTimeLabel(provider: Provider): string {
+  return provider === "cloudresearch" ? "Estimated time" : "Time";
+}
+
+function getPlacesLabel(provider: Provider): string {
+  return provider === "cloudresearch" ? "Spots" : "Places";
+}
+
+function formatProviderLink(provider: Provider, url: string): string[] {
   const safeUrl = escapeHtml(url);
-  return [`🔗 <b>Open study:</b>`, `<a href="${safeUrl}">${safeUrl}</a>`];
+  return [
+    `🔗 <b>${provider === "cloudresearch" ? "Open project" : "Open study"}:</b>`,
+    `<a href="${safeUrl}">${safeUrl}</a>`,
+  ];
 }
 
 export async function sendTelegramMessage(chatId: string, text: string) {
@@ -62,36 +127,32 @@ export async function sendTelegramMessage(chatId: string, text: string) {
 
   if (!response.ok) {
     const error = await response.text();
-    console.error(`Failed to send Telegram message to ${chatId}:`, error);
+    console.error(`Failed to send Telegram message:`, error);
     throw new Error(`Telegram API error: ${response.status}`);
   }
 
   return response.json();
 }
 
-export function formatStudyNotification(study: {
-  title: string;
-  reward: string;
-  completionTime?: string | null;
-  places?: string | null;
-  url: string;
-  postedAt: string;
-  supportedDevices?: SupportedDevice[];
-  mobileSupported?: boolean;
-}) {
+export function formatStudyNotification(study: ProviderStudy) {
+  const provider = getProvider(study);
   const lines = [
-    `🔬 <b>New Study Available!</b>`,
+    getNewHeader(provider),
     ``,
-    `📋 <b>Title:</b> ${escapeHtml(study.title)}`,
-    `💰 <b>Reward:</b> ${escapeHtml(study.reward)}`,
+    `📋 <b>${getTitleLabel(provider)}:</b> ${escapeHtml(study.title)}`,
+    `💰 <b>${getRewardLabel(provider)}:</b> ${escapeHtml(study.reward)}`,
   ];
 
   if (study.completionTime) {
-    lines.push(`⏱ <b>Time:</b> ${escapeHtml(study.completionTime)}`);
+    lines.push(
+      `⏱ <b>${getTimeLabel(provider)}:</b> ${escapeHtml(study.completionTime)}`,
+    );
   }
 
   if (study.places) {
-    lines.push(`👥 <b>Places:</b> ${escapeHtml(study.places)}`);
+    lines.push(
+      `👥 <b>${getPlacesLabel(provider)}:</b> ${escapeHtml(study.places)}`,
+    );
   }
 
   const devicesLine = formatDevicesLine(study);
@@ -100,34 +161,30 @@ export function formatStudyNotification(study: {
   }
 
   lines.push(``);
-  lines.push(...formatStudyLink(study.url));
+  lines.push(...formatProviderLink(provider, study.url));
 
   return lines.join("\n");
 }
 
-export function formatStudyReappeared(study: {
-  title: string;
-  reward: string;
-  completionTime?: string | null;
-  places?: string | null;
-  url: string;
-  postedAt: string;
-  supportedDevices?: SupportedDevice[];
-  mobileSupported?: boolean;
-}) {
+export function formatStudyReappeared(study: ProviderStudy) {
+  const provider = getProvider(study);
   const lines = [
-    `🔄 <b>Study Re-appeared!</b>`,
+    getReappearedHeader(provider),
     ``,
-    `📋 <b>Title:</b> ${escapeHtml(study.title)}`,
-    `💰 <b>Reward:</b> ${escapeHtml(study.reward)}`,
+    `📋 <b>${getTitleLabel(provider)}:</b> ${escapeHtml(study.title)}`,
+    `💰 <b>${getRewardLabel(provider)}:</b> ${escapeHtml(study.reward)}`,
   ];
 
   if (study.completionTime) {
-    lines.push(`⏱ <b>Time:</b> ${escapeHtml(study.completionTime)}`);
+    lines.push(
+      `⏱ <b>${getTimeLabel(provider)}:</b> ${escapeHtml(study.completionTime)}`,
+    );
   }
 
   if (study.places) {
-    lines.push(`👥 <b>Places:</b> ${escapeHtml(study.places)}`);
+    lines.push(
+      `👥 <b>${getPlacesLabel(provider)}:</b> ${escapeHtml(study.places)}`,
+    );
   }
 
   const devicesLine = formatDevicesLine(study);
@@ -136,12 +193,13 @@ export function formatStudyReappeared(study: {
   }
 
   lines.push(``);
-  lines.push(...formatStudyLink(study.url));
+  lines.push(...formatProviderLink(provider, study.url));
 
   return lines.join("\n");
 }
 
 export function formatStudiesSummary(
+  provider: Provider,
   totalNew: number,
   topStudies: {
     title: string;
@@ -158,9 +216,7 @@ export function formatStudiesSummary(
 ) {
   const isReappeared = options?.reappeared === true;
   const lines = [
-    isReappeared
-      ? `🔄 <b>${totalNew} Re-appeared Studies Available!</b>`
-      : `📊 <b>${totalNew} New Studies Available!</b>`,
+    getSummaryHeader(provider, totalNew, isReappeared),
     ``,
   ];
 
@@ -168,7 +224,7 @@ export function formatStudiesSummary(
     const study = topStudies[i]!;
     if (i > 0) lines.push(``); // empty line between studies
 
-    lines.push(`📋 <b>Title:</b> ${escapeHtml(study.title)}`);
+    lines.push(`📋 <b>${getTitleLabel(provider)}:</b> ${escapeHtml(study.title)}`);
     lines.push(`💰 ${escapeHtml(study.reward)}`);
     if (study.completionTime) {
       lines.push(`⏱ ${escapeHtml(study.completionTime)}`);
@@ -181,7 +237,7 @@ export function formatStudiesSummary(
       lines.push(devicesLine);
     }
     lines.push(``);
-    lines.push(...formatStudyLink(study.url));
+    lines.push(...formatProviderLink(provider, study.url));
   }
 
   const remaining = totalNew - topStudies.length;
