@@ -13,6 +13,10 @@ import {
   setBeepEnabled,
   getCloudResearchAutoRefreshEnabled,
   setCloudResearchAutoRefreshEnabled,
+  getOpenProlificWindowEnabled,
+  setOpenProlificWindowEnabled,
+  getOpenCloudResearchWindowEnabled,
+  setOpenCloudResearchWindowEnabled,
 } from "../lib/storage.js";
 import { confirmToken, checkStatus, ConnectionError } from "../lib/api.js";
 import { updateStatus } from "../lib/storage.js";
@@ -44,6 +48,12 @@ const minPlacesSlider = $<HTMLInputElement>("min-places-slider");
 const minPlacesValue = $("min-places-value");
 const minPlacesRow = $("min-places-row");
 const beepToggle = $<HTMLInputElement>("beep-toggle");
+const openProlificWindowToggle = $<HTMLInputElement>(
+  "open-prolific-window-toggle",
+);
+const openCloudResearchWindowToggle = $<HTMLInputElement>(
+  "open-cloudresearch-window-toggle",
+);
 const cloudResearchAutoRefreshToggle = $<HTMLInputElement>(
   "cloudresearch-auto-refresh-toggle",
 );
@@ -253,6 +263,10 @@ type TestAlertResponse = {
   };
 };
 
+type AlertMessageMeta = {
+  isManualTest?: boolean;
+};
+
 /**
  * Temporary manual pipeline test hook.
  * Sends a fake study through the same background STUDY_DETECTED path used by
@@ -304,6 +318,7 @@ async function handleSendProviderTestAlert(provider: Provider) {
     const response = await sendRuntimeMessage<TestAlertResponse>({
       type: "STUDY_DETECTED",
       study: fakeStudy,
+      meta: { isManualTest: true } satisfies AlertMessageMeta,
     });
 
     testAlertResult.classList.remove("hidden", "success", "error");
@@ -362,16 +377,25 @@ async function checkProviderTabs() {
  */
 async function loadSettings() {
   console.log(`${LOG} ⚙️ Loading settings...`);
-  const [minReward, notifEnabled, minPlaces, beepEnabled, cloudRefresh] =
-    await Promise.all([
+  const [
+    minReward,
+    notifEnabled,
+    minPlaces,
+    beepEnabled,
+    openProlificWindow,
+    openCloudResearchWindow,
+    cloudRefresh,
+  ] = await Promise.all([
     getMinReward(),
     getNotificationsEnabled(),
     getMinPlaces(),
     getBeepEnabled(),
+    getOpenProlificWindowEnabled(),
+    getOpenCloudResearchWindowEnabled(),
     getCloudResearchAutoRefreshEnabled(),
   ]);
   console.log(
-    `${LOG} ⚙️ Settings loaded: minReward=£${minReward.toFixed(2)}, notifications=${notifEnabled}, minPlaces=${minPlaces}, beep=${beepEnabled}, cloudRefresh=${cloudRefresh}`,
+    `${LOG} ⚙️ Settings loaded: minReward=£${minReward.toFixed(2)}, notifications=${notifEnabled}, minPlaces=${minPlaces}, beep=${beepEnabled}, openProlificWindow=${openProlificWindow}, openCloudResearchWindow=${openCloudResearchWindow}, cloudRefresh=${cloudRefresh}`,
   );
 
   minRewardSlider.value = String(minReward);
@@ -388,6 +412,8 @@ async function loadSettings() {
   minPlacesValue.textContent = String(minPlaces);
 
   beepToggle.checked = beepEnabled;
+  openProlificWindowToggle.checked = openProlificWindow;
+  openCloudResearchWindowToggle.checked = openCloudResearchWindow;
   cloudResearchAutoRefreshToggle.checked = cloudRefresh;
 
   // Force toggle off and locked when access is inactive
@@ -460,6 +486,22 @@ beepToggle.addEventListener("change", () => {
   const enabled = beepToggle.checked;
   setBeepEnabled(enabled);
   console.log(`[Settings] Beep ${enabled ? "enabled" : "disabled"}`);
+});
+
+openProlificWindowToggle.addEventListener("change", () => {
+  const enabled = openProlificWindowToggle.checked;
+  setOpenProlificWindowEnabled(enabled);
+  console.log(
+    `[Settings] Prolific window opening ${enabled ? "enabled" : "disabled"}`,
+  );
+});
+
+openCloudResearchWindowToggle.addEventListener("change", () => {
+  const enabled = openCloudResearchWindowToggle.checked;
+  setOpenCloudResearchWindowEnabled(enabled);
+  console.log(
+    `[Settings] CloudResearch window opening ${enabled ? "enabled" : "disabled"}`,
+  );
 });
 
 cloudResearchAutoRefreshToggle.addEventListener("change", () => {

@@ -20,6 +20,10 @@ export const DEFAULT_MIN_REWARD_GBP = 0;
 /** Default minimum number of available places that triggers a notification. */
 export const DEFAULT_MIN_PLACES = 1;
 
+/** Default window-open behavior for alert URLs. */
+export const DEFAULT_OPEN_PROLIFIC_WINDOW = true;
+export const DEFAULT_OPEN_CLOUDRESEARCH_WINDOW = true;
+
 /** Fixed GBP → USD conversion rate. */
 export const GBP_TO_USD = 1.35;
 
@@ -34,4 +38,6 @@ export const STORAGE_KEYS = {
   MIN_PLACES: "minPlaces",
   BEEP_ENABLED: "beepEnabled",
   CLOUDRESEARCH_AUTO_REFRESH_ENABLED: "cloudResearchAutoRefreshEnabled",
+  OPEN_PROLIFIC_WINDOW_ENABLED: "openProlificWindowEnabled",
+  OPEN_CLOUDRESEARCH_WINDOW_ENABLED: "openCloudResearchWindowEnabled",
 } as const;

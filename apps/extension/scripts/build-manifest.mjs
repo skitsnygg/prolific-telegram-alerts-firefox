@@ -15,7 +15,7 @@ const baseManifestPath = path.join(extensionRoot, "public", "manifest.json");
 
 const DEFAULT_API_BASE_URL = "https://prolificapi.notifyme.top";
 const FIREFOX_GECKO_ID =
-  "prolific-telegram-alerts-firefox@skitsnygg.github.io";
+  "prolific-connect-telegram-alerts@brian-migliore.local";
 const FIREFOX_STRICT_MIN_VERSION = "112.0";
 
 const baseManifest = JSON.parse(await readFile(baseManifestPath, "utf8"));

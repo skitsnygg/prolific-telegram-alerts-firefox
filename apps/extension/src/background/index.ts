@@ -11,6 +11,8 @@ import {
   getLinkedState,
   clearLinkedState,
   getBeepEnabled,
+  getOpenCloudResearchWindowEnabled,
+  getOpenProlificWindowEnabled,
 } from "../lib/storage.js";
 import { STATUS_CHECK_INTERVAL_HOURS, API_BASE_URL } from "../config.js";
 import {
@@ -23,6 +25,7 @@ import {
   scripting,
   supportsOffscreenAudio,
   tabs,
+  windows,
 } from "../lib/browser.js";
 import type {
   Provider,
@@ -31,8 +34,13 @@ import type {
 } from "../lib/alert-types.js";
 
 const LOG = "[Study Alerts][BG]";
+const WINDOW_LOG = "[Study Alerts]:";
 const STATUS_ALARM_NAME = "status-check";
 let beepFallbackWarned = false;
+
+type AlertMessageMeta = {
+  isManualTest?: boolean;
+};
 
 /**
  * Play the beep alert sound via an offscreen document.
@@ -112,6 +120,72 @@ function getSummaryNotificationTitle(
   }
 
   return reappeared ? "Re-appeared Studies!" : "New Studies Available!";
+}
+
+async function getOpenWindowEnabled(provider: Provider): Promise<boolean> {
+  return provider === "cloudresearch"
+    ? await getOpenCloudResearchWindowEnabled()
+    : await getOpenProlificWindowEnabled();
+}
+
+async function maybeOpenAlertWindow(options: {
+  provider: Provider;
+  url?: string | null;
+  alertKind: "study-detected" | "studies-summary";
+  meta?: AlertMessageMeta;
+}): Promise<void> {
+  const { provider, url, alertKind, meta } = options;
+  const settingEnabled = await getOpenWindowEnabled(provider);
+  console.log(
+    `${WINDOW_LOG} open-window setting ${settingEnabled ? "enabled" : "disabled"} for provider=${provider} alert=${alertKind}`,
+  );
+
+  if (!settingEnabled) {
+    return;
+  }
+
+  if (meta?.isManualTest) {
+    console.log(
+      `${WINDOW_LOG} open-window skipped for provider=${provider} alert=${alertKind}: manual test`,
+    );
+    return;
+  }
+
+  const trimmedUrl = url?.trim();
+  if (!trimmedUrl) {
+    console.log(
+      `${WINDOW_LOG} open-window skipped for provider=${provider} alert=${alertKind}: no URL available`,
+    );
+    return;
+  }
+
+  console.log(
+    `${WINDOW_LOG} open-window URL chosen for provider=${provider} alert=${alertKind}: ${trimmedUrl}`,
+  );
+
+  try {
+    await windows.create({
+      url: trimmedUrl,
+      type: "normal",
+      focused: true,
+    });
+    console.log(
+      `${WINDOW_LOG} window opened success for provider=${provider} alert=${alertKind}`,
+    );
+  } catch (error) {
+    console.error(
+      `${WINDOW_LOG} window opened failure for provider=${provider} alert=${alertKind}`,
+      error,
+    );
+  }
+}
+
+function getSingleSummaryUrl(summary: SummaryPayload): string | null {
+  if (summary.totalNew !== 1 || summary.topStudies.length !== 1) {
+    return null;
+  }
+
+  return summary.topStudies[0]?.url?.trim() || null;
 }
 
 /**
@@ -316,7 +390,7 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
   );
 
   if (message.type === "STUDY_DETECTED") {
-    handleStudyDetected(message.study)
+    handleStudyDetected(message.study, message.meta)
       .then((result) => {
         console.log(
           `${LOG} 📤 Study handled, responding:`,
@@ -332,7 +406,7 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "STUDY_REAPPEARED") {
-    handleStudyReappeared(message.study)
+    handleStudyReappeared(message.study, message.meta)
       .then((result) => {
         console.log(
           `${LOG} 📤 Reappeared study handled, responding:`,
@@ -348,7 +422,7 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "STUDIES_SUMMARY") {
-    handleStudiesSummary(message.summary)
+    handleStudiesSummary(message.summary, message.meta)
       .then((result) => {
         console.log(
           `${LOG} 📤 Summary handled, responding:`,
@@ -364,7 +438,7 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "STUDIES_REAPPEARED_SUMMARY") {
-    handleStudiesReappearedSummary(message.summary)
+    handleStudiesReappearedSummary(message.summary, message.meta)
       .then((result) => {
         console.log(
           `${LOG} 📤 Reappeared summary handled, responding:`,
@@ -385,7 +459,10 @@ runtime.onMessage.addListener((message, _sender, sendResponse) => {
 /**
  * Handle a new study detected by the content script.
  */
-async function handleStudyDetected(study: StudyPayload) {
+async function handleStudyDetected(
+  study: StudyPayload,
+  meta?: AlertMessageMeta,
+) {
   console.log(
     `${LOG} 📋 handleStudyDetected(): provider=${study.provider} "${study.title}" — ${study.reward}`,
   );
@@ -412,6 +489,13 @@ async function handleStudyDetected(study: StudyPayload) {
     if (beepOn) {
       await playBeepAlert();
     }
+
+    await maybeOpenAlertWindow({
+      provider: study.provider,
+      url: study.url,
+      alertKind: "study-detected",
+      meta,
+    });
   } else if (response.data?.deduplicated) {
     console.log(
       `${LOG} ♻️ Study "${study.title}" was deduplicated server-side`,
@@ -424,7 +508,10 @@ async function handleStudyDetected(study: StudyPayload) {
 /**
  * Handle a re-appeared study.
  */
-async function handleStudyReappeared(study: StudyPayload) {
+async function handleStudyReappeared(
+  study: StudyPayload,
+  meta?: AlertMessageMeta,
+) {
   console.log(
     `${LOG} 🔄 handleStudyReappeared(): provider=${study.provider} "${study.title}" — ${study.reward}`,
   );
@@ -450,6 +537,7 @@ async function handleStudyReappeared(study: StudyPayload) {
     if (beepOn) {
       await playBeepAlert();
     }
+
   }
 
   return response;
@@ -458,7 +546,10 @@ async function handleStudyReappeared(study: StudyPayload) {
 /**
  * Handle a batch summary of new studies.
  */
-async function handleStudiesSummary(summary: SummaryPayload) {
+async function handleStudiesSummary(
+  summary: SummaryPayload,
+  meta?: AlertMessageMeta,
+) {
   console.log(
     `${LOG} 📊 handleStudiesSummary(): provider=${summary.provider} count=${summary.totalNew}, top ${summary.topStudies.length} included`,
   );
@@ -481,6 +572,13 @@ async function handleStudiesSummary(summary: SummaryPayload) {
     if (beepOn) {
       await playBeepAlert();
     }
+
+    await maybeOpenAlertWindow({
+      provider: summary.provider,
+      url: getSingleSummaryUrl(summary),
+      alertKind: "studies-summary",
+      meta,
+    });
   }
 
   return response;
@@ -489,7 +587,10 @@ async function handleStudiesSummary(summary: SummaryPayload) {
 /**
  * Handle a batch summary of re-appeared studies.
  */
-async function handleStudiesReappearedSummary(summary: SummaryPayload) {
+async function handleStudiesReappearedSummary(
+  summary: SummaryPayload,
+  meta?: AlertMessageMeta,
+) {
   console.log(
     `${LOG} 📊 handleStudiesReappearedSummary(): provider=${summary.provider} count=${summary.totalNew}, top ${summary.topStudies.length} included`,
   );
@@ -514,6 +615,7 @@ async function handleStudiesReappearedSummary(summary: SummaryPayload) {
     if (beepOn) {
       await playBeepAlert();
     }
+
   }
 
   return response;

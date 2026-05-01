@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Prolific Telegram Alerts",
+  "name": "Prolific / Connect - Telegram Alerts",
   "description": "Get instant Telegram notifications when new paid studies or projects appear on Prolific and CloudResearch Connect.",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "permissions": [
     "storage",
     "alarms",

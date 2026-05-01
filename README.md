@@ -13,8 +13,9 @@ This local branch adds practical self-hosted development support around the same
 - CloudResearch Connect alerts
 - local API + local Telegram bot support
 - Telegram messages with study/project links
+- Optional opening of the normal study/project page in a new browser window after a real alert is sent
 
-This extension is alerts-only. It does not auto-click, auto-accept, reserve, submit, or otherwise interact with studies/projects.
+This extension is alerts-only. It does not auto-click, auto-accept, reserve, submit, or otherwise interact with studies/projects. When window opening is enabled, the extension opens the normal study/project page only. It does not auto-accept or interact with studies/projects.
 
 ## What works in this branch
 
@@ -22,6 +23,7 @@ This extension is alerts-only. It does not auto-click, auto-accept, reserve, sub
 - CloudResearch Connect alerts from `https://connect.cloudresearch.com/participant/dashboard`
 - Telegram notifications through the local/self-hosted API and bot
 - Study/project links included in Telegram messages
+- Optional new-window opening for real Prolific and CloudResearch alerts
 - Prolific device support in alerts when desktop/mobile data is available
 - CloudResearch auto-refresh at `10–15 seconds`
 
@@ -121,12 +123,20 @@ VITE_API_BASE_URL=http://127.0.0.1:3001 npm run build:firefox
 - watches `https://app.prolific.com/studies`
 - sends Telegram alerts for visible studies
 - includes desktop/mobile device support when available
+- can open the normal `https://app.prolific.com/studies/<id>` page in a new browser window after a real alert is sent
 
 ### CloudResearch Connect
 
 - watches `https://connect.cloudresearch.com/participant/dashboard`
 - sends Telegram alerts for visible projects
 - uses dashboard auto-refresh with randomized jitter at `10–15 seconds`
+- can open the normal project details page when available, otherwise the dashboard URL already present in the alert payload
+
+### Popup settings
+
+- `Open new window for Prolific alerts` defaults to ON
+- `Open new window for CloudResearch alerts` defaults to ON
+- Manual popup test alerts do not open browser windows
 
 ## macOS local startup scripts
 

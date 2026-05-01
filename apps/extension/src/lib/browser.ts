@@ -8,6 +8,7 @@ export const webext = extensionScope.browser ?? extensionScope.chrome!;
 export const runtime = webext.runtime;
 export const storage = webext.storage;
 export const tabs = webext.tabs;
+export const windows = webext.windows;
 export const notifications = webext.notifications;
 export const alarms = webext.alarms;
 export const action = webext.action;

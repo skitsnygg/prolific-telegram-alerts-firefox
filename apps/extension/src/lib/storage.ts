@@ -3,6 +3,8 @@ import {
   STORAGE_KEYS,
   DEFAULT_MIN_REWARD_GBP,
   DEFAULT_MIN_PLACES,
+  DEFAULT_OPEN_PROLIFIC_WINDOW,
+  DEFAULT_OPEN_CLOUDRESEARCH_WINDOW,
 } from "../config.js";
 import { storage } from "./browser.js";
 
@@ -152,6 +154,58 @@ export async function getBeepEnabled(): Promise<boolean> {
 export async function setBeepEnabled(enabled: boolean): Promise<void> {
   console.log(`${LOG} 💾 setBeepEnabled(): ${enabled}`);
   await storage.local.set({ [STORAGE_KEYS.BEEP_ENABLED]: enabled });
+}
+
+/**
+ * Get whether opening a new window is enabled for Prolific alerts. Defaults to true.
+ */
+export async function getOpenProlificWindowEnabled(): Promise<boolean> {
+  const result = await storage.local.get(
+    STORAGE_KEYS.OPEN_PROLIFIC_WINDOW_ENABLED,
+  );
+  const val = result[STORAGE_KEYS.OPEN_PROLIFIC_WINDOW_ENABLED];
+  const enabled =
+    val === undefined ? DEFAULT_OPEN_PROLIFIC_WINDOW : (val as boolean);
+  console.log(`${LOG} 📖 getOpenProlificWindowEnabled(): ${enabled}`);
+  return enabled;
+}
+
+/**
+ * Set whether opening a new window is enabled for Prolific alerts.
+ */
+export async function setOpenProlificWindowEnabled(
+  enabled: boolean,
+): Promise<void> {
+  console.log(`${LOG} 💾 setOpenProlificWindowEnabled(): ${enabled}`);
+  await storage.local.set({
+    [STORAGE_KEYS.OPEN_PROLIFIC_WINDOW_ENABLED]: enabled,
+  });
+}
+
+/**
+ * Get whether opening a new window is enabled for CloudResearch alerts. Defaults to true.
+ */
+export async function getOpenCloudResearchWindowEnabled(): Promise<boolean> {
+  const result = await storage.local.get(
+    STORAGE_KEYS.OPEN_CLOUDRESEARCH_WINDOW_ENABLED,
+  );
+  const val = result[STORAGE_KEYS.OPEN_CLOUDRESEARCH_WINDOW_ENABLED];
+  const enabled =
+    val === undefined ? DEFAULT_OPEN_CLOUDRESEARCH_WINDOW : (val as boolean);
+  console.log(`${LOG} 📖 getOpenCloudResearchWindowEnabled(): ${enabled}`);
+  return enabled;
+}
+
+/**
+ * Set whether opening a new window is enabled for CloudResearch alerts.
+ */
+export async function setOpenCloudResearchWindowEnabled(
+  enabled: boolean,
+): Promise<void> {
+  console.log(`${LOG} 💾 setOpenCloudResearchWindowEnabled(): ${enabled}`);
+  await storage.local.set({
+    [STORAGE_KEYS.OPEN_CLOUDRESEARCH_WINDOW_ENABLED]: enabled,
+  });
 }
 
 /**
