@@ -18,6 +18,10 @@ export const users = pgTable("users", {
 
   telegramUsername: text("telegram_username"),
 
+  primaryWindowEndsAt: timestamp("primary_window_ends_at", {
+    withTimezone: true,
+  }),
+
   notificationsSent: integer("notifications_sent").notNull().default(0),
 
   lastOnline: timestamp("last_online", { withTimezone: true }),
