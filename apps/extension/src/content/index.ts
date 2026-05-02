@@ -74,6 +74,10 @@ const CLOUDRESEARCH_REFRESH_MAX_MS = 15_000;
 
 const STARTUP_DOM_WAIT_MAX_MS = 2_000;
 const STARTUP_DOM_WAIT_STEP_MS = 150;
+const PROLIFIC_AUTO_ACCEPT_HASH_TOKEN = "__study_alerts_auto_accept__";
+const PROLIFIC_AUTO_ACCEPT_BUTTON_SELECTOR =
+  'button.reserve-study-button[data-testid="reserve"]';
+const PROLIFIC_AUTO_ACCEPT_MAX_WAIT_MS = 15_000;
 
 // ── Context / lifecycle ─────────────────────────────────────────────────────
 
@@ -83,6 +87,7 @@ const timeoutIds: ReturnType<typeof setTimeout>[] = [];
 let scanInProgress = false;
 let domStudiesReadyLogged = false;
 const loggedSkipKeys = new Set<string>();
+let prolificAutoAcceptStarted = false;
 
 function detectProviderFromLocation(): Provider | null {
   const { protocol, hostname } = window.location;
@@ -99,6 +104,19 @@ function isProlificStudiesRoute(): boolean {
   if (url.protocol === "file:") return true;
   if (!url.hostname.includes("prolific.com")) return false;
   return url.pathname === "/studies" || url.pathname === "/studies/";
+}
+
+function isProlificAutoAcceptRoute(): boolean {
+  const url = new URL(window.location.href);
+  if (url.protocol === "file:" || url.hostname !== "app.prolific.com") {
+    return false;
+  }
+
+  return (
+    url.pathname === "/studies" ||
+    url.pathname === "/studies/" ||
+    url.pathname.startsWith("/studies/")
+  );
 }
 
 function isCloudResearchDashboardRoute(): boolean {
@@ -144,6 +162,25 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function hasProlificAutoAcceptMarker(): boolean {
+  return window.location.hash.includes(PROLIFIC_AUTO_ACCEPT_HASH_TOKEN);
+}
+
+function clearProlificAutoAcceptMarker(): void {
+  if (!hasProlificAutoAcceptMarker()) return;
+
+  const url = new URL(window.location.href);
+  const fragments = url.hash
+    .replace(/^#/, "")
+    .split("&")
+    .filter((fragment) => fragment && fragment !== PROLIFIC_AUTO_ACCEPT_HASH_TOKEN);
+
+  const nextHash = fragments.join("&");
+  const nextUrl = `${url.pathname}${url.search}${nextHash ? `#${nextHash}` : ""}`;
+  window.history.replaceState(window.history.state, "", nextUrl);
+  scheduleAutoRefresh();
+}
+
 function logSkipOnce(key: string, message: string): void {
   if (loggedSkipKeys.has(key)) return;
   loggedSkipKeys.add(key);
@@ -152,6 +189,121 @@ function logSkipOnce(key: string, message: string): void {
 
 function describeStudy(study: Pick<StudyInfo, "id" | "title">): string {
   return `id=${study.id} title="${study.title}"`;
+}
+
+function findProlificReserveStudyButton(): HTMLButtonElement | null {
+  const buttons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      PROLIFIC_AUTO_ACCEPT_BUTTON_SELECTOR,
+    ),
+  );
+
+  for (const button of buttons) {
+    const label = readText(button);
+    if (
+      !button.disabled &&
+      isElementVisible(button) &&
+      /take part in this study/i.test(label ?? "")
+    ) {
+      return button;
+    }
+  }
+
+  return null;
+}
+
+async function waitForProlificReserveStudyButton(
+  timeoutMs: number,
+): Promise<HTMLButtonElement | null> {
+  const existing = findProlificReserveStudyButton();
+  if (existing) {
+    return existing;
+  }
+
+  return await new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const button = findProlificReserveStudyButton();
+      if (!button) return;
+      observer.disconnect();
+      clearTimeout(timeoutId);
+      resolve(button);
+    });
+
+    const timeoutId = setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "disabled", "style", "aria-disabled"],
+    });
+  });
+}
+
+async function maybeRunProlificAutoAccept(): Promise<void> {
+  if (prolificAutoAcceptStarted) return;
+  if (!hasProlificAutoAcceptMarker()) return;
+  if (!isProlificAutoAcceptRoute()) return;
+
+  prolificAutoAcceptStarted = true;
+  console.log(`${LOG_PREFIX} auto-accept requested for current Prolific page`);
+
+  const button = await waitForProlificReserveStudyButton(
+    PROLIFIC_AUTO_ACCEPT_MAX_WAIT_MS,
+  );
+  clearProlificAutoAcceptMarker();
+
+  if (!button) {
+    console.warn(
+      `${LOG_PREFIX} auto-accept skipped: reserve button not found within timeout`,
+    );
+    return;
+  }
+
+  console.log(`${LOG_PREFIX} auto-accept clicking Prolific reserve button`);
+  button.click();
+}
+
+function scheduleProlificAutoAccept(): void {
+  if (!hasProlificAutoAcceptMarker()) return;
+
+  if (isProlificAutoAcceptRoute()) {
+    void maybeRunProlificAutoAccept();
+    return;
+  }
+
+  const startedAt = Date.now();
+  const intervalId = setInterval(() => {
+    if (!isContextValid()) {
+      clearInterval(intervalId);
+      cleanup();
+      return;
+    }
+
+    if (prolificAutoAcceptStarted || !hasProlificAutoAcceptMarker()) {
+      clearInterval(intervalId);
+      return;
+    }
+
+    if (!isProlificAutoAcceptRoute()) {
+      if (Date.now() - startedAt >= PROLIFIC_AUTO_ACCEPT_MAX_WAIT_MS) {
+        clearInterval(intervalId);
+        clearProlificAutoAcceptMarker();
+        console.warn(
+          `${LOG_PREFIX} auto-accept skipped: Prolific studies route did not load in time`,
+        );
+      }
+      return;
+    }
+
+    clearInterval(intervalId);
+    void maybeRunProlificAutoAccept();
+  }, 250);
+
+  intervalIds.push(intervalId);
 }
 
 async function waitForInitialDomReady(): Promise<void> {
@@ -1497,6 +1649,7 @@ function scheduleAutoRefresh(): void {
   console.log(`${LOG_PREFIX} dashboard eligible: ${eligible ? "yes" : "no"}`);
 
   registerDebugHooks(provider);
+  scheduleProlificAutoAccept();
 
   if (!provider || !eligible) {
     return;

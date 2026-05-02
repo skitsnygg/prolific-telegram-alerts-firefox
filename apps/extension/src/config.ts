@@ -23,6 +23,7 @@ export const DEFAULT_MIN_PLACES = 1;
 /** Default window-open behavior for alert URLs. */
 export const DEFAULT_OPEN_PROLIFIC_WINDOW = true;
 export const DEFAULT_OPEN_CLOUDRESEARCH_WINDOW = true;
+export const DEFAULT_AUTO_ACCEPT_PROLIFIC = false;
 
 /** Fixed GBP → USD conversion rate. */
 export const GBP_TO_USD = 1.35;
@@ -40,4 +41,5 @@ export const STORAGE_KEYS = {
   CLOUDRESEARCH_AUTO_REFRESH_ENABLED: "cloudResearchAutoRefreshEnabled",
   OPEN_PROLIFIC_WINDOW_ENABLED: "openProlificWindowEnabled",
   OPEN_CLOUDRESEARCH_WINDOW_ENABLED: "openCloudResearchWindowEnabled",
+  AUTO_ACCEPT_PROLIFIC_ENABLED: "autoAcceptProlificEnabled",
 } as const;

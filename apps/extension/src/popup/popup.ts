@@ -17,6 +17,8 @@ import {
   setOpenProlificWindowEnabled,
   getOpenCloudResearchWindowEnabled,
   setOpenCloudResearchWindowEnabled,
+  getAutoAcceptProlificEnabled,
+  setAutoAcceptProlificEnabled,
 } from "../lib/storage.js";
 import { confirmToken, checkStatus, ConnectionError } from "../lib/api.js";
 import { updateStatus } from "../lib/storage.js";
@@ -50,6 +52,10 @@ const minPlacesRow = $("min-places-row");
 const beepToggle = $<HTMLInputElement>("beep-toggle");
 const openProlificWindowToggle = $<HTMLInputElement>(
   "open-prolific-window-toggle",
+);
+const autoAcceptProlificRow = $("auto-accept-prolific-row");
+const autoAcceptProlificToggle = $<HTMLInputElement>(
+  "auto-accept-prolific-toggle",
 );
 const openCloudResearchWindowToggle = $<HTMLInputElement>(
   "open-cloudresearch-window-toggle",
@@ -107,6 +113,24 @@ function showError(message: string) {
 
 function hideError() {
   errorMessage.classList.add("hidden");
+}
+
+function setNotificationsControlsEnabled(enabled: boolean) {
+  minRewardRow.style.opacity = enabled ? "1" : "0.4";
+  minRewardRow.style.pointerEvents = enabled ? "" : "none";
+  minPlacesRow.style.opacity = enabled ? "1" : "0.4";
+  minPlacesRow.style.pointerEvents = enabled ? "" : "none";
+}
+
+function setAutoAcceptProlificAvailability(options: {
+  isActive: boolean;
+  openProlificWindowEnabled: boolean;
+}) {
+  const enabled =
+    options.isActive && options.openProlificWindowEnabled;
+  autoAcceptProlificRow.style.opacity = enabled ? "1" : "0.4";
+  autoAcceptProlificRow.style.pointerEvents = enabled ? "" : "none";
+  autoAcceptProlificToggle.disabled = !enabled;
 }
 
 /**
@@ -383,6 +407,7 @@ async function loadSettings() {
     minPlaces,
     beepEnabled,
     openProlificWindow,
+    autoAcceptProlific,
     openCloudResearchWindow,
     cloudRefresh,
   ] = await Promise.all([
@@ -391,11 +416,12 @@ async function loadSettings() {
     getMinPlaces(),
     getBeepEnabled(),
     getOpenProlificWindowEnabled(),
+    getAutoAcceptProlificEnabled(),
     getOpenCloudResearchWindowEnabled(),
     getCloudResearchAutoRefreshEnabled(),
   ]);
   console.log(
-    `${LOG} ⚙️ Settings loaded: minReward=£${minReward.toFixed(2)}, notifications=${notifEnabled}, minPlaces=${minPlaces}, beep=${beepEnabled}, openProlificWindow=${openProlificWindow}, openCloudResearchWindow=${openCloudResearchWindow}, cloudRefresh=${cloudRefresh}`,
+    `${LOG} ⚙️ Settings loaded: minReward=£${minReward.toFixed(2)}, notifications=${notifEnabled}, minPlaces=${minPlaces}, beep=${beepEnabled}, openProlificWindow=${openProlificWindow}, autoAcceptProlific=${autoAcceptProlific}, openCloudResearchWindow=${openCloudResearchWindow}, cloudRefresh=${cloudRefresh}`,
   );
 
   minRewardSlider.value = String(minReward);
@@ -403,16 +429,14 @@ async function loadSettings() {
   minRewardValue.textContent = `£${minReward.toFixed(2)} ($${usdEquiv})`;
 
   notificationsToggle.checked = notifEnabled;
-  minRewardRow.style.opacity = notifEnabled ? "1" : "0.4";
-  minRewardRow.style.pointerEvents = notifEnabled ? "" : "none";
-  minPlacesRow.style.opacity = notifEnabled ? "1" : "0.4";
-  minPlacesRow.style.pointerEvents = notifEnabled ? "" : "none";
+  setNotificationsControlsEnabled(notifEnabled);
 
   minPlacesSlider.value = String(minPlaces);
   minPlacesValue.textContent = String(minPlaces);
 
   beepToggle.checked = beepEnabled;
   openProlificWindowToggle.checked = openProlificWindow;
+  autoAcceptProlificToggle.checked = autoAcceptProlific;
   openCloudResearchWindowToggle.checked = openCloudResearchWindow;
   cloudResearchAutoRefreshToggle.checked = cloudRefresh;
 
@@ -421,12 +445,13 @@ async function loadSettings() {
   if (!state.isActive) {
     notificationsToggle.checked = false;
     notificationsToggle.disabled = true;
-    minRewardRow.style.opacity = "0.4";
-    minRewardRow.style.pointerEvents = "none";
-    minPlacesRow.style.opacity = "0.4";
-    minPlacesRow.style.pointerEvents = "none";
+    setNotificationsControlsEnabled(false);
     cloudResearchAutoRefreshToggle.disabled = true;
   }
+  setAutoAcceptProlificAvailability({
+    isActive: state.isActive === true,
+    openProlificWindowEnabled: openProlificWindow,
+  });
 
   settingsSection.classList.remove("hidden");
 
@@ -461,10 +486,7 @@ minRewardSlider.addEventListener("input", () => {
 notificationsToggle.addEventListener("change", () => {
   const enabled = notificationsToggle.checked;
   setNotificationsEnabled(enabled);
-  minRewardRow.style.opacity = enabled ? "1" : "0.4";
-  minRewardRow.style.pointerEvents = enabled ? "" : "none";
-  minPlacesRow.style.opacity = enabled ? "1" : "0.4";
-  minPlacesRow.style.pointerEvents = enabled ? "" : "none";
+  setNotificationsControlsEnabled(enabled);
   console.log(`[Settings] Notifications ${enabled ? "enabled" : "disabled"}`);
 });
 
@@ -491,8 +513,22 @@ beepToggle.addEventListener("change", () => {
 openProlificWindowToggle.addEventListener("change", () => {
   const enabled = openProlificWindowToggle.checked;
   setOpenProlificWindowEnabled(enabled);
+  void getLinkedState().then((state) => {
+    setAutoAcceptProlificAvailability({
+      isActive: state.isActive === true,
+      openProlificWindowEnabled: enabled,
+    });
+  });
   console.log(
     `[Settings] Prolific window opening ${enabled ? "enabled" : "disabled"}`,
+  );
+});
+
+autoAcceptProlificToggle.addEventListener("change", () => {
+  const enabled = autoAcceptProlificToggle.checked;
+  setAutoAcceptProlificEnabled(enabled);
+  console.log(
+    `[Settings] Prolific auto-accept ${enabled ? "enabled" : "disabled"}`,
   );
 });
 

@@ -5,6 +5,7 @@ import {
   DEFAULT_MIN_PLACES,
   DEFAULT_OPEN_PROLIFIC_WINDOW,
   DEFAULT_OPEN_CLOUDRESEARCH_WINDOW,
+  DEFAULT_AUTO_ACCEPT_PROLIFIC,
 } from "../config.js";
 import { storage } from "./browser.js";
 
@@ -205,6 +206,32 @@ export async function setOpenCloudResearchWindowEnabled(
   console.log(`${LOG} 💾 setOpenCloudResearchWindowEnabled(): ${enabled}`);
   await storage.local.set({
     [STORAGE_KEYS.OPEN_CLOUDRESEARCH_WINDOW_ENABLED]: enabled,
+  });
+}
+
+/**
+ * Get whether one-shot Prolific study auto-accept is enabled. Defaults to false.
+ */
+export async function getAutoAcceptProlificEnabled(): Promise<boolean> {
+  const result = await storage.local.get(
+    STORAGE_KEYS.AUTO_ACCEPT_PROLIFIC_ENABLED,
+  );
+  const val = result[STORAGE_KEYS.AUTO_ACCEPT_PROLIFIC_ENABLED];
+  const enabled =
+    val === undefined ? DEFAULT_AUTO_ACCEPT_PROLIFIC : (val as boolean);
+  console.log(`${LOG} 📖 getAutoAcceptProlificEnabled(): ${enabled}`);
+  return enabled;
+}
+
+/**
+ * Set whether one-shot Prolific study auto-accept is enabled.
+ */
+export async function setAutoAcceptProlificEnabled(
+  enabled: boolean,
+): Promise<void> {
+  console.log(`${LOG} 💾 setAutoAcceptProlificEnabled(): ${enabled}`);
+  await storage.local.set({
+    [STORAGE_KEYS.AUTO_ACCEPT_PROLIFIC_ENABLED]: enabled,
   });
 }
 

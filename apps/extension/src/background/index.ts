@@ -13,6 +13,7 @@ import {
   getBeepEnabled,
   getOpenCloudResearchWindowEnabled,
   getOpenProlificWindowEnabled,
+  getAutoAcceptProlificEnabled,
 } from "../lib/storage.js";
 import { STATUS_CHECK_INTERVAL_HOURS, API_BASE_URL } from "../config.js";
 import {
@@ -41,6 +42,8 @@ let beepFallbackWarned = false;
 type AlertMessageMeta = {
   isManualTest?: boolean;
 };
+
+const PROLIFIC_AUTO_ACCEPT_HASH_TOKEN = "__study_alerts_auto_accept__";
 
 /**
  * Play the beep alert sound via an offscreen document.
@@ -128,6 +131,27 @@ async function getOpenWindowEnabled(provider: Provider): Promise<boolean> {
     : await getOpenProlificWindowEnabled();
 }
 
+function addProlificAutoAcceptHash(urlString: string): string {
+  try {
+    const url = new URL(urlString);
+    if (url.hash.includes(PROLIFIC_AUTO_ACCEPT_HASH_TOKEN)) {
+      return url.toString();
+    }
+
+    const existingHash = url.hash.replace(/^#/, "");
+    url.hash = existingHash
+      ? `${existingHash}&${PROLIFIC_AUTO_ACCEPT_HASH_TOKEN}`
+      : PROLIFIC_AUTO_ACCEPT_HASH_TOKEN;
+    return url.toString();
+  } catch (error) {
+    console.warn(
+      `${WINDOW_LOG} auto-accept marker skipped: invalid URL ${urlString}`,
+      error,
+    );
+    return urlString;
+  }
+}
+
 async function maybeOpenAlertWindow(options: {
   provider: Provider;
   url?: string | null;
@@ -164,8 +188,19 @@ async function maybeOpenAlertWindow(options: {
   );
 
   try {
+    let openUrl = trimmedUrl;
+    if (provider === "prolific") {
+      const autoAcceptEnabled = await getAutoAcceptProlificEnabled();
+      if (autoAcceptEnabled) {
+        openUrl = addProlificAutoAcceptHash(trimmedUrl);
+        console.log(
+          `${WINDOW_LOG} auto-accept marker appended for provider=${provider} alert=${alertKind}`,
+        );
+      }
+    }
+
     await windows.create({
-      url: trimmedUrl,
+      url: openUrl,
       type: "normal",
       focused: true,
     });
@@ -537,7 +572,6 @@ async function handleStudyReappeared(
     if (beepOn) {
       await playBeepAlert();
     }
-
   }
 
   return response;
